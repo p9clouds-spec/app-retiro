@@ -464,6 +464,9 @@
       // Configurar filtros iniciales
       document.getElementById('filter-servicio').addEventListener('change', applyFilters);
       document.getElementById('filter-estado').addEventListener('change', applyFilters);
+      
+      // IMPORTANTE: Aplicar filtros al inicio para sincronizar contadores
+      applyFilters();
     }
 
     function loadMarkers(targetMap) {
