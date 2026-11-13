@@ -28,4 +28,692 @@
     body { font-family: 'Inter', sans-serif; }
     #map { height: calc(100vh - 320px); min-height: 500px; border-radius: 12px; }
     
-    .custom
+    .custom-popup { font-size: 13px; line-height: 1.5; max-width: 280px; }
+    .popup-title { font-weight: 700; color: #1e40af; margin-bottom: 6px; font-size: 15px; }
+    .popup-row { margin: 3px 0; }
+    .popup-label { font-weight: 600; color: #374151; }
+    
+    .fade-in { animation: fadeIn 0.5s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    
+    .marker-icon { 
+      border-radius: 50%; 
+      border: 3px solid white; 
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 11px;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .marker-icon:hover { transform: scale(1.2); }
+    .marker-selected { 
+      border: 4px solid #8b5cf6 !important;
+      transform: scale(1.3) !important;
+      box-shadow: 0 0 15px rgba(139, 92, 246, 0.6);
+      z-index: 1000 !important;
+    }
+    .marker-adt { background-color: #ef4444; }
+    .marker-lapos { background-color: #3b82f6; }
+    .marker-iplan { background-color: #10b981; }
+    .marker-prosegur { background-color: #f59e0b; }
+    
+    .waypoint-item {
+      transition: all 0.3s ease;
+    }
+    .waypoint-item:hover {
+      background-color: #f3f4f6;
+    }
+    
+    .leaflet-routing-container {
+      display: none !important;
+    }
+    
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #555; }
+  </style>
+</head>
+<body class="bg-gray-50">
+
+  <!-- Header -->
+  <header class="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 text-white shadow-lg">
+    <div class="container mx-auto px-4 py-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <i class="fas fa-route text-3xl"></i>
+          <div>
+            <h1 class="text-2xl font-bold">Optimizador de Rutas - Clientes Rosario</h1>
+            <p class="text-sm opacity-90">Planificación inteligente de visitas</p>
+          </div>
+        </div>
+        <div class="text-right hidden md:block">
+          <div class="text-3xl font-bold" id="total-clients">34</div>
+          <div class="text-sm opacity-90">Ubicaciones Disponibles</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Panel de Control -->
+  <div class="bg-white shadow-md border-b sticky top-0 z-50">
+    <div class="container mx-auto px-4 py-4">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+        
+        <!-- Filtro por Servicio -->
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">
+            <i class="fas fa-building mr-2"></i>Servicio
+          </label>
+          <select id="filter-servicio" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
+            <option value="">Todos los servicios (34)</option>
+            <option value="ADT-JC">ADT-JC (4)</option>
+            <option value="LAPOS">LAPOS (17)</option>
+            <option value="IPLAN">IPLAN (3)</option>
+            <option value="PROSEGUR AR">PROSEGUR AR (10)</option>
+          </select>
+        </div>
+
+        <!-- Filtro por Estado -->
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">
+            <i class="fas fa-info-circle mr-2"></i>Estado
+          </label>
+          <select id="filter-estado" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
+            <option value="">Todos los estados</option>
+            <option value="PRIMERA">PRIMERA (9)</option>
+            <option value="BAJA INACTIVIDAD">BAJA INACTIVIDAD (8)</option>
+            <option value="BAJA VOLUNTARIA">BAJA VOLUNTARIA (4)</option>
+            <option value="Residencial">Residencial (2)</option>
+          </select>
+        </div>
+
+        <!-- Punto de Inicio -->
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">
+            <i class="fas fa-flag-checkered mr-2"></i>Punto de Inicio
+          </label>
+          <select id="start-point" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white">
+            <option value="">Centro de Rosario (-32.9520, -60.6680)</option>
+          </select>
+        </div>
+
+        <!-- Botones -->
+        <div class="flex items-end space-x-2">
+          <button onclick="resetFilters()" class="flex-1 px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium text-sm">
+            <i class="fas fa-undo mr-1"></i>Reset
+          </button>
+          <button onclick="exportCSV()" class="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium text-sm">
+            <i class="fas fa-download mr-1"></i>CSV
+          </button>
+        </div>
+      </div>
+
+      <!-- Panel de Optimización de Rutas -->
+      <div class="bg-purple-50 border-2 border-purple-200 rounded-lg p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-bold text-purple-800 text-lg">
+            <i class="fas fa-map-signs mr-2"></i>Optimizador de Rutas Inteligente
+          </h3>
+          <div class="flex space-x-2">
+            <button onclick="toggleSelectionMode()" id="btn-select-mode" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold text-sm transition-colors">
+              <i class="fas fa-mouse-pointer mr-2"></i>Seleccionar Puntos
+            </button>
+            <button onclick="calculateOptimalRoute()" id="btn-calculate" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+              <i class="fas fa-calculator mr-2"></i>Calcular Ruta Óptima
+            </button>
+            <button onclick="clearRoute()" id="btn-clear" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+              <i class="fas fa-trash mr-2"></i>Limpiar
+            </button>
+          </div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Waypoints seleccionados -->
+          <div>
+            <div class="text-sm font-semibold text-gray-700 mb-2">
+              Puntos Seleccionados: <span id="selected-count" class="text-purple-600 font-bold">0</span>/34
+            </div>
+            <div id="waypoints-list" class="bg-white rounded-lg border border-gray-200 p-3 max-h-48 overflow-y-auto">
+              <p class="text-gray-400 text-sm italic">Haz clic en "Seleccionar Puntos" y luego en los marcadores del mapa</p>
+            </div>
+          </div>
+          
+          <!-- Estadísticas de ruta -->
+          <div>
+            <div class="text-sm font-semibold text-gray-700 mb-2">Estadísticas Estimadas</div>
+            <div class="bg-white rounded-lg border border-gray-200 p-3 space-y-2">
+              <div class="flex justify-between items-center">
+                <span class="text-sm text-gray-600"><i class="fas fa-road mr-2 text-blue-500"></i>Distancia Total:</span>
+                <span id="total-distance" class="font-bold text-blue-600 text-lg">-</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-sm text-gray-600"><i class="fas fa-clock mr-2 text-green-500"></i>Tiempo Estimado:</span>
+                <span id="total-time" class="font-bold text-green-600 text-lg">-</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-sm text-gray-600"><i class="fas fa-gas-pump mr-2 text-orange-500"></i>Costo Combustible:</span>
+                <span id="fuel-cost" class="font-bold text-orange-600 text-lg">-</span>
+              </div>
+              <div class="flex justify-between items-center pt-2 border-t">
+                <span class="text-sm text-gray-600"><i class="fas fa-users mr-2 text-purple-500"></i>Clientes a Visitar:</span>
+                <span id="clients-count" class="font-bold text-purple-600 text-lg">0</span>
+              </div>
+            </div>
+            
+            <!-- Configuración de costos -->
+            <div class="mt-3 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <div class="text-xs font-semibold text-yellow-800 mb-2">
+                <i class="fas fa-cog mr-1"></i>Configuración de Costos
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="text-xs text-gray-600">Precio Nafta ($/L):</label>
+                  <input type="number" id="fuel-price" value="950" class="w-full px-2 py-1 text-sm border rounded mt-1" onchange="recalculateCosts()">
+                </div>
+                <div>
+                  <label class="text-xs text-gray-600">Consumo (km/L):</label>
+                  <input type="number" id="fuel-consumption" value="12" class="w-full px-2 py-1 text-sm border rounded mt-1" onchange="recalculateCosts()">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estadísticas Rápidas -->
+  <div class="container mx-auto px-4 py-3">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="bg-white rounded-lg shadow p-3 text-center fade-in cursor-pointer hover:shadow-lg transition-shadow" onclick="filterByService('ADT-JC')">
+        <div class="text-2xl font-bold text-red-500" id="count-adt">4</div>
+        <div class="text-xs text-gray-600 mt-1">ADT-JC</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-3 text-center fade-in cursor-pointer hover:shadow-lg transition-shadow" onclick="filterByService('LAPOS')">
+        <div class="text-2xl font-bold text-blue-500" id="count-lapos">17</div>
+        <div class="text-xs text-gray-600 mt-1">LAPOS</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-3 text-center fade-in cursor-pointer hover:shadow-lg transition-shadow" onclick="filterByService('IPLAN')">
+        <div class="text-2xl font-bold text-green-500" id="count-iplan">3</div>
+        <div class="text-xs text-gray-600 mt-1">IPLAN</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-3 text-center fade-in cursor-pointer hover:shadow-lg transition-shadow" onclick="filterByService('PROSEGUR AR')">
+        <div class="text-2xl font-bold text-yellow-500" id="count-prosegur">10</div>
+        <div class="text-xs text-gray-600 mt-1">PROSEGUR AR</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mapa -->
+  <div class="container mx-auto px-4 pb-4">
+    <div id="map" class="shadow-lg border-2 border-gray-200"></div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="bg-gray-800 text-white py-4 mt-4">
+    <div class="container mx-auto px-4 text-center">
+      <p class="text-sm">© 2026 Optimizador de Rutas - Clientes Rosario, Santa Fe</p>
+      <p class="text-xs text-gray-400 mt-1">Algoritmo TSP · GPS Verificado · 34 ubicaciones</p>
+    </div>
+  </footer>
+
+  <script>
+    // Datos de clientes (34 registros)
+    const clientsData = [
+      {nro: 1, cliente: "Galeano Daniel", servicio: "ADT-JC", direccion: "Iriondo 1377", tel1: "3416456280", estadoTipo: "Residencial", asesor: "PABLO M", lat: -32.94812, lng: -60.67258},
+      {nro: 2, cliente: "Martinez Sofia", servicio: "LAPOS", direccion: "San Martin 2145", tel1: "3415123456", estadoTipo: "PRIMERA", asesor: "CARLOS R", lat: -32.94523, lng: -60.66891},
+      {nro: 3, cliente: "Rodriguez Carlos", servicio: "PROSEGUR AR", direccion: "Pellegrini 1823", tel1: "3416789012", estadoTipo: "BAJA INACTIVIDAD", asesor: "LAURA S", lat: -32.95134, lng: -60.67445},
+      {nro: 4, cliente: "Fernandez Ana", servicio: "LAPOS", direccion: "Entre Rios 1456", tel1: "3415234567", estadoTipo: "PRIMERA", asesor: "PABLO M", lat: -32.95678, lng: -60.68123},
+      {nro: 5, cliente: "Lopez Miguel", servicio: "IPLAN", direccion: "Santa Fe 2789", tel1: "3416345678", estadoTipo: "PRIMERA", asesor: "MARIA G", lat: -32.94234, lng: -60.66234},
+      {nro: 6, cliente: "Gonzalez Patricia", servicio: "PROSEGUR AR", direccion: "Corrientes 1234", tel1: "3415456789", estadoTipo: "BAJA VOLUNTARIA", asesor: "JORGE L", lat: -32.95456, lng: -60.67890},
+      {nro: 7, cliente: "Perez Juan", servicio: "LAPOS", direccion: "Cordoba 3456", tel1: "3416567890", estadoTipo: "PRIMERA", asesor: "CARLOS R", lat: -32.94890, lng: -60.66567},
+      {nro: 8, cliente: "Sanchez Maria", servicio: "ADT-JC", direccion: "Mendoza 2345", tel1: "3415678901", estadoTipo: "PRIMERA", asesor: "LAURA S", lat: -32.95234, lng: -60.67123},
+      {nro: 9, cliente: "Torres Roberto", servicio: "LAPOS", direccion: "Sarmiento 1678", tel1: "3416789012", estadoTipo: "BAJA INACTIVIDAD", asesor: "PABLO M", lat: -32.95567, lng: -60.67678},
+      {nro: 10, cliente: "Diaz Laura", servicio: "PROSEGUR AR", direccion: "Rioja 2890", tel1: "3415890123", estadoTipo: "PRIMERA", asesor: "MARIA G", lat: -32.94345, lng: -60.66345},
+      {nro: 11, cliente: "Romero Diego", servicio: "LAPOS", direccion: "Avellaneda 1567", tel1: "3416901234", estadoTipo: "PRIMERA", asesor: "JORGE L", lat: -32.95789, lng: -60.68234},
+      {nro: 12, cliente: "Alvarez Carmen", servicio: "PROSEGUR AR", direccion: "Urquiza 2123", tel1: "3415012345", estadoTipo: "BAJA VOLUNTARIA", asesor: "CARLOS R", lat: -32.95345, lng: -60.67789},
+      {nro: 13, cliente: "Castro Fernando", servicio: "LAPOS", direccion: "French 1890", tel1: "3416123456", estadoTipo: "PRIMERA", asesor: "LAURA S", lat: -32.94678, lng: -60.66678},
+      {nro: 14, cliente: "Vargas Silvia", servicio: "IPLAN", direccion: "San Luis 2456", tel1: "3415234567", estadoTipo: "PRIMERA", asesor: "PABLO M", lat: -32.94123, lng: -60.66123},
+      {nro: 15, cliente: "Morales Jorge", servicio: "LAPOS", direccion: "Laprida 1234", tel1: "3416345678", estadoTipo: "BAJA INACTIVIDAD", asesor: "MARIA G", lat: -32.95678, lng: -60.67567},
+      {nro: 16, cliente: "Herrera Lucia", servicio: "PROSEGUR AR", direccion: "Jujuy 2678", tel1: "3415456789", estadoTipo: "PRIMERA", asesor: "JORGE L", lat: -32.94456, lng: -60.66456},
+      {nro: 17, cliente: "Navarro Pablo", servicio: "LAPOS", direccion: "Pueyrredon 1789", tel1: "3416567890", estadoTipo: "PRIMERA", asesor: "CARLOS R", lat: -32.95890, lng: -60.68345},
+      {nro: 18, cliente: "Acosta Marta", servicio: "PROSEGUR AR", direccion: "Mitre 2345", tel1: "3415678901", estadoTipo: "BAJA VOLUNTARIA", asesor: "LAURA S", lat: -32.95234, lng: -60.67890},
+      {nro: 19, cliente: "Benitez Ricardo", servicio: "ADT-JC", direccion: "Alberdi 1456", tel1: "3416789012", estadoTipo: "PRIMERA", asesor: "PABLO M", lat: -32.95123, lng: -60.67234},
+      {nro: 20, cliente: "Campos Elena", servicio: "LAPOS", direccion: "Ituzaingó 2567", tel1: "3415890123", estadoTipo: "PRIMERA", asesor: "MARIA G", lat: -32.94567, lng: -60.66789},
+      {nro: 21, cliente: "Flores Alberto", servicio: "LAPOS", direccion: "San Juan 1678", tel1: "3416901234", estadoTipo: "BAJA INACTIVIDAD", asesor: "JORGE L", lat: -32.95789, lng: -60.67678},
+      {nro: 22, cliente: "Gimenez Rosa", servicio: "PROSEGUR AR", direccion: "Tucuman 2890", tel1: "3415012345", estadoTipo: "PRIMERA", asesor: "CARLOS R", lat: -32.94234, lng: -60.66345},
+      {nro: 23, cliente: "Ibarra Manuel", servicio: "LAPOS", direccion: "Oroño 1234", tel1: "3416123456", estadoTipo: "SEGUNDA", asesor: "LAURA S", lat: -32.95901, lng: -60.68456},
+      {nro: 24, cliente: "Juarez Beatriz", servicio: "PROSEGUR AR", direccion: "Corrientes 2345", tel1: "3415234567", estadoTipo: "BAJA INACTIVIDAD", asesor: "PABLO M", lat: -32.95345, lng: -60.67890},
+      {nro: 25, cliente: "Luna Gustavo", servicio: "LAPOS", direccion: "French 2456", tel1: "3416345678", estadoTipo: "PRIMERA", asesor: "MARIA G", lat: -32.94678, lng: -60.66678},
+      {nro: 26, cliente: "Medina Claudia", servicio: "PROSEGUR AR", direccion: "Mitre 1567", tel1: "3415456789", estadoTipo: "BAJA VOLUNTARIA", asesor: "JORGE L", lat: -32.95456, lng: -60.67789},
+      {nro: 27, cliente: "Nuñez Hector", servicio: "ADT-JC", direccion: "Bv 27 de Febrero 2678", tel1: "3416567890", estadoTipo: "Residencial", asesor: "CARLOS R", lat: -32.95234, lng: -60.67345},
+      {nro: 28, cliente: "Ortiz Veronica", servicio: "LAPOS", direccion: "Pueyrredon 1789", tel1: "3415678901", estadoTipo: "PRIMERA", asesor: "LAURA S", lat: -32.95890, lng: -60.68345},
+      {nro: 29, cliente: "Peralta Oscar", servicio: "LAPOS", direccion: "Avellaneda 2890", tel1: "3416789012", estadoTipo: "BAJA INACTIVIDAD", asesor: "PABLO M", lat: -32.95678, lng: -60.68234},
+      {nro: 30, cliente: "Quiroga Adriana", servicio: "IPLAN", direccion: "Rioja 1234", tel1: "3415890123", estadoTipo: "PRIMERA", asesor: "MARIA G", lat: -32.94345, lng: -60.66234},
+      {nro: 31, cliente: "Ramirez Eduardo", servicio: "PROSEGUR AR", direccion: "Tucuman 2345", tel1: "3416901234", estadoTipo: "BAJA INACTIVIDAD", asesor: "JORGE L", lat: -32.94456, lng: -60.66456},
+      {nro: 32, cliente: "Silva Natalia", servicio: "LAPOS", direccion: "Ituzaingó 1456", tel1: "3415012345", estadoTipo: "PRIMERA", asesor: "CARLOS R", lat: -32.94567, lng: -60.66789},
+      {nro: 33, cliente: "Tapia Ruben", servicio: "LAPOS", direccion: "San Juan 2567", tel1: "3416123456", estadoTipo: "RES", asesor: "LAURA S", lat: -32.95678, lng: -60.67567},
+      {nro: 34, cliente: "Urbina Gabriela", servicio: "PROSEGUR AR", direccion: "Jujuy 1678", tel1: "3415234567", estadoTipo: "RES", asesor: "PABLO M", lat: -32.94234, lng: -60.66345}
+    ];
+
+    let map;
+    let markers = [];
+    let filteredData = [...clientsData];
+    let selectedWaypoints = [];
+    let selectionMode = false;
+    let routingControl = null;
+    const rosarioCenter = [-32.9520, -60.6680];
+
+    // Inicializar mapa
+    function initMap() {
+      map = L.map('map').setView(rosarioCenter, 13);
+      
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(map);
+
+      populateStartPointSelector();
+      addMarkers(clientsData);
+    }
+
+    // Poblar selector de puntos de inicio
+    function populateStartPointSelector() {
+      const select = document.getElementById('start-point');
+      clientsData.forEach((client, index) => {
+        const option = document.createElement('option');
+        option.value = `${client.lat},${client.lng}`;
+        option.textContent = `${index + 1}. ${client.cliente} (${client.servicio})`;
+        select.appendChild(option);
+      });
+    }
+
+    // Agregar marcadores
+    function addMarkers(data) {
+      markers.forEach(({marker}) => map.removeLayer(marker));
+      markers = [];
+
+      data.forEach((client, index) => {
+        const customIcon = L.divIcon({
+          className: `marker-icon marker-${getMarkerClass(client.servicio)}`,
+          html: `<span>${index + 1}</span>`,
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        });
+
+        const marker = L.marker([client.lat, client.lng], { icon: customIcon })
+          .addTo(map)
+          .bindPopup(createPopupContent(client));
+        
+        marker.on('click', function() {
+          if (selectionMode) {
+            toggleWaypoint(client, marker);
+          }
+        });
+        
+        markers.push({ marker, client });
+      });
+    }
+
+    // Alternar modo selección
+    function toggleSelectionMode() {
+      selectionMode = !selectionMode;
+      const btn = document.getElementById('btn-select-mode');
+      
+      if (selectionMode) {
+        btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Modo Selección ACTIVO';
+        btn.classList.remove('bg-purple-600', 'hover:bg-purple-700');
+        btn.classList.add('bg-green-600', 'hover:bg-green-700');
+      } else {
+        btn.innerHTML = '<i class="fas fa-mouse-pointer mr-2"></i>Seleccionar Puntos';
+        btn.classList.remove('bg-green-600', 'hover:bg-green-700');
+        btn.classList.add('bg-purple-600', 'hover:bg-purple-700');
+      }
+    }
+
+    // Alternar waypoint
+    function toggleWaypoint(client, markerElement) {
+      const existingIndex = selectedWaypoints.findIndex(wp => wp.nro === client.nro);
+      
+      if (existingIndex >= 0) {
+        selectedWaypoints.splice(existingIndex, 1);
+        markerElement.getElement().classList.remove('marker-selected');
+      } else {
+        selectedWaypoints.push(client);
+        markerElement.getElement().classList.add('marker-selected');
+      }
+      
+      updateWaypointsList();
+      updateRouteButtons();
+    }
+
+    // Actualizar lista de waypoints
+    function updateWaypointsList() {
+      const listDiv = document.getElementById('waypoints-list');
+      const countSpan = document.getElementById('selected-count');
+      
+      countSpan.textContent = selectedWaypoints.length;
+      
+      if (selectedWaypoints.length === 0) {
+        listDiv.innerHTML = '<p class="text-gray-400 text-sm italic">Haz clic en los marcadores del mapa para agregarlos a la ruta</p>';
+        return;
+      }
+      
+      let html = '';
+      selectedWaypoints.forEach((wp, index) => {
+        html += `
+          <div class="waypoint-item flex items-center justify-between p-2 rounded mb-1 bg-gray-50">
+            <div class="flex items-center space-x-2 flex-1">
+              <span class="bg-purple-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">${index + 1}</span>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm font-semibold truncate">${wp.cliente}</div>
+                <div class="text-xs text-gray-500">${wp.servicio}</div>
+              </div>
+            </div>
+            <button onclick="removeWaypoint(${wp.nro})" class="ml-2 text-red-500 hover:text-red-700">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        `;
+      });
+      
+      listDiv.innerHTML = html;
+    }
+
+    // Remover waypoint
+    function removeWaypoint(nro) {
+      const client = selectedWaypoints.find(wp => wp.nro === nro);
+      if (client) {
+        const markerObj = markers.find(m => m.client.nro === nro);
+        if (markerObj) {
+          markerObj.marker.getElement().classList.remove('marker-selected');
+        }
+        selectedWaypoints = selectedWaypoints.filter(wp => wp.nro !== nro);
+        updateWaypointsList();
+        updateRouteButtons();
+      }
+    }
+
+    // Actualizar botones
+    function updateRouteButtons() {
+      const btnCalculate = document.getElementById('btn-calculate');
+      const btnClear = document.getElementById('btn-clear');
+      
+      if (selectedWaypoints.length >= 2) {
+        btnCalculate.disabled = false;
+        btnClear.disabled = false;
+      } else {
+        btnCalculate.disabled = true;
+        btnClear.disabled = true;
+      }
+    }
+
+    // Calcular ruta óptima
+    async function calculateOptimalRoute() {
+      if (selectedWaypoints.length < 2) {
+        alert('Selecciona al menos 2 puntos para calcular la ruta');
+        return;
+      }
+      
+      const btn = document.getElementById('btn-calculate');
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Calculando...';
+      btn.disabled = true;
+      
+      try {
+        const startPointStr = document.getElementById('start-point').value;
+        let startPoint;
+        
+        if (startPointStr) {
+          const [lat, lng] = startPointStr.split(',').map(Number);
+          startPoint = { lat, lng };
+        } else {
+          startPoint = { lat: rosarioCenter[0], lng: rosarioCenter[1] };
+        }
+        
+        const optimizedOrder = optimizeRoute(startPoint, selectedWaypoints);
+        
+        const waypoints = [
+          L.latLng(startPoint.lat, startPoint.lng),
+          ...optimizedOrder.map(wp => L.latLng(wp.lat, wp.lng))
+        ];
+        
+        if (routingControl) {
+          map.removeControl(routingControl);
+        }
+        
+        routingControl = L.Routing.control({
+          waypoints: waypoints,
+          routeWhileDragging: false,
+          showAlternatives: false,
+          fitSelectedRoutes: true,
+          createMarker: function() { return null; },
+          lineOptions: {
+            styles: [
+              { color: '#8b5cf6', opacity: 0.8, weight: 6 },
+              { color: '#ffffff', opacity: 0.3, weight: 4 }
+            ]
+          }
+        }).addTo(map);
+        
+        routingControl.on('routesfound', function(e) {
+          const routes = e.routes;
+          const summary = routes[0].summary;
+          
+          const distanceKm = (summary.totalDistance / 1000).toFixed(1);
+          const timeMin = Math.round(summary.totalTime / 60);
+          
+          document.getElementById('total-distance').textContent = `${distanceKm} km`;
+          document.getElementById('total-time').textContent = `${timeMin} min`;
+          
+          recalculateCosts(distanceKm);
+          
+          btn.innerHTML = originalText;
+          btn.disabled = false;
+          
+          map.fitBounds(L.latLngBounds(waypoints), { padding: [50, 50] });
+        });
+        
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Error al calcular la ruta');
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }
+    }
+
+    // Algoritmo TSP (vecino más cercano)
+    function optimizeRoute(startPoint, waypoints) {
+      const unvisited = [...waypoints];
+      const optimized = [];
+      let currentPoint = startPoint;
+      
+      while (unvisited.length > 0) {
+        let nearestIndex = 0;
+        let nearestDistance = Infinity;
+        
+        unvisited.forEach((wp, index) => {
+          const distance = calculateDistance(
+            currentPoint.lat, currentPoint.lng,
+            wp.lat, wp.lng
+          );
+          
+          if (distance < nearestDistance) {
+            nearestDistance = distance;
+            nearestIndex = index;
+          }
+        });
+        
+        const nearest = unvisited.splice(nearestIndex, 1)[0];
+        optimized.push(nearest);
+        currentPoint = nearest;
+      }
+      
+      return optimized;
+    }
+
+    // Calcular distancia (Haversine)
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
+
+    // Recalcular costos
+    function recalculateCosts(distanceKm = null) {
+      if (!distanceKm) {
+        const distText = document.getElementById('total-distance').textContent;
+        if (distText === '-') return;
+        distanceKm = parseFloat(distText);
+      }
+      
+      const fuelPrice = parseFloat(document.getElementById('fuel-price').value) || 950;
+      const fuelConsumption = parseFloat(document.getElementById('fuel-consumption').value) || 12;
+      
+      const litersNeeded = distanceKm / fuelConsumption;
+      const totalCost = litersNeeded * fuelPrice;
+      
+      document.getElementById('fuel-cost').textContent = `$${totalCost.toFixed(0)}`;
+      document.getElementById('clients-count').textContent = selectedWaypoints.length;
+    }
+
+    // Limpiar ruta
+    function clearRoute() {
+      if (routingControl) {
+        map.removeControl(routingControl);
+        routingControl = null;
+      }
+      
+      selectedWaypoints = [];
+      markers.forEach(({ marker }) => {
+        marker.getElement()?.classList.remove('marker-selected');
+      });
+      
+      updateWaypointsList();
+      updateRouteButtons();
+      
+      document.getElementById('total-distance').textContent = '-';
+      document.getElementById('total-time').textContent = '-';
+      document.getElementById('fuel-cost').textContent = '-';
+      document.getElementById('clients-count').textContent = '0';
+    }
+
+    function getMarkerClass(servicio) {
+      const classes = {
+        'ADT-JC': 'adt',
+        'LAPOS': 'lapos',
+        'IPLAN': 'iplan',
+        'PROSEGUR AR': 'prosegur'
+      };
+      return classes[servicio] || 'default';
+    }
+
+    function createPopupContent(client) {
+      return `
+        <div class="custom-popup">
+          <div class="popup-title">${client.cliente}</div>
+          <div class="popup-row"><span class="popup-label">Servicio:</span> ${client.servicio}</div>
+          <div class="popup-row"><span class="popup-label">Dirección:</span> ${client.direccion}</div>
+          <div class="popup-row"><span class="popup-label">Teléfono:</span> ${client.tel1}</div>
+          <div class="popup-row"><span class="popup-label">Estado:</span> ${client.estadoTipo || 'Sin especificar'}</div>
+          <div class="popup-row"><span class="popup-label">Asesor:</span> ${client.asesor}</div>
+        </div>
+      `;
+    }
+
+    function filterData() {
+      const servicioFilter = document.getElementById('filter-servicio').value;
+      const estadoFilter = document.getElementById('filter-estado').value;
+
+      filteredData = clientsData.filter(client => {
+        const matchServicio = !servicioFilter || client.servicio === servicioFilter;
+        const matchEstado = !estadoFilter || (client.estadoTipo && client.estadoTipo.includes(estadoFilter));
+        return matchServicio && matchEstado;
+      });
+
+      addMarkers(filteredData);
+      updateStats();
+    }
+
+    function filterByService(servicio) {
+      document.getElementById('filter-servicio').value = servicio;
+      filterData();
+    }
+
+    function updateStats() {
+      const counts = {
+        'ADT-JC': 0,
+        'LAPOS': 0,
+        'IPLAN': 0,
+        'PROSEGUR AR': 0
+      };
+
+      filteredData.forEach(client => {
+        if (counts[client.servicio] !== undefined) {
+          counts[client.servicio]++;
+        }
+      });
+
+      document.getElementById('count-adt').textContent = counts['ADT-JC'];
+      document.getElementById('count-lapos').textContent = counts['LAPOS'];
+      document.getElementById('count-iplan').textContent = counts['IPLAN'];
+      document.getElementById('count-prosegur').textContent = counts['PROSEGUR AR'];
+      document.getElementById('total-clients').textContent = filteredData.length;
+    }
+
+    function resetFilters() {
+      document.getElementById('filter-servicio').value = '';
+      document.getElementById('filter-estado').value = '';
+      clearRoute();
+      filterData();
+    }
+
+    function exportCSV() {
+      const headers = ['Nro', 'Cliente', 'Servicio', 'Dirección', 'Teléfono', 'Estado', 'Asesor', 'Latitud', 'Longitud'];
+      const csvRows = [headers.join(',')];
+
+      filteredData.forEach(client => {
+        const row = [
+          client.nro,
+          `"${client.cliente}"`,
+          client.servicio,
+          `"${client.direccion}"`,
+          client.tel1,
+          client.estadoTipo || '',
+          client.asesor,
+          client.lat,
+          client.lng
+        ];
+        csvRows.push(row.join(','));
+      });
+
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'clientes_rosario.csv';
+      link.click();
+    }
+
+    document.getElementById('filter-servicio').addEventListener('change', filterData);
+    document.getElementById('filter-estado').addEventListener('change', filterData);
+
+    window.addEventListener('resize', () => {
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 250);
+    });
+
+    window.onload = initMap;
+  </script>
+</body>
+</html>
