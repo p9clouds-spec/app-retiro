@@ -2,8 +2,8 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>TrackPro GPS - Rosario</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mapa Interactivo de Clientes - Rosario</title>
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -11,210 +11,106 @@
   <!-- Leaflet CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  
-  <!-- Leaflet Routing Machine -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
-  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
-  
-  <!-- Leaflet Rotated Marker -->
-  <script src="https://unpkg.com/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.js"></script>
 
-  <!-- Google Fonts -->
+  <!-- Google Fonts: Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
-  <!-- Font Awesome -->
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Font Awesome para iconos -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 
   <style>
-    body { font-family: 'Inter', sans-serif; overflow: hidden; background-color: #f3f4f6; }
+    body { font-family: 'Inter', sans-serif; }
+    #map { height: calc(100vh - 280px); min-height: 500px; border-radius: 12px; }
     
-    /* Mapa ocupa toda la pantalla */
-    #map { 
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      z-index: 1;
-    }
-
-    /* Interfaz de Administración (Dashboard) */
-    .dashboard-ui {
-      position: relative;
-      z-index: 10;
-      background: white;
-      height: 100vh;
-      overflow-y: auto;
-      display: block;
-      transition: transform 0.3s ease-in-out;
-    }
+    .custom-popup { font-size: 13px; line-height: 1.5; max-width: 280px; }
+    .popup-title { font-weight: 700; color: #1e40af; margin-bottom: 6px; font-size: 15px; }
+    .popup-row { margin: 3px 0; }
+    .popup-label { font-weight: 600; color: #374151; }
     
-    .dashboard-ui.hidden {
-      transform: translateY(-100%);
-      display: none;
-    }
-
-    /* Interfaz de Navegación (Waze Style) */
-    .navigation-ui {
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      z-index: 1000;
-      pointer-events: none;
-      display: none;
-      flex-direction: column;
-      justify-content: space-between;
-    }
+    /* Animaciones */
+    .fade-in { animation: fadeIn 0.5s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     
-    .navigation-ui.active {
-      display: flex;
-    }
-
-    .nav-element {
-      pointer-events: auto;
-    }
-
-    /* Panel Superior Waze */
-    .waze-top-bar {
-      background: linear-gradient(180deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 80%, transparent 100%);
-      padding: 20px 20px 40px 20px;
-      color: white;
-      text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-    }
-
-    /* Panel Inferior Waze */
-    .waze-bottom-panel {
-      background: white;
-      border-top-left-radius: 24px;
-      border-top-right-radius: 24px;
-      box-shadow: 0 -10px 40px rgba(0,0,0,0.3);
-      padding: 20px;
-      margin-bottom: env(safe-area-inset-bottom);
-      pointer-events: auto;
-    }
-
-    /* Instrucciones de giro grandes */
-    .instruction-box {
-      background: #2563eb; /* Azul intenso */
-      color: white;
-      border-radius: 16px;
-      padding: 16px;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
-    }
-
-    .next-turn-icon {
-      font-size: 2.5rem;
-      margin-right: 15px;
-      width: 50px;
-      text-align: center;
-    }
-
-    .distance-to-turn {
-      font-size: 2.2rem;
-      font-weight: 800;
-      line-height: 1;
-    }
-
-    .street-name {
-      font-size: 1.1rem;
-      font-weight: 600;
-      opacity: 0.9;
-    }
-
-    /* Marcador de usuario estilo Waze */
-    .user-arrow {
-      width: 0; 
-      height: 0; 
-      border-left: 12px solid transparent;
-      border-right: 12px solid transparent;
-      border-bottom: 24px solid #3b82f6;
-      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));
-      transform-origin: center bottom;
-    }
-    
-    .user-pulse {
-      position: absolute;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      width: 40px; height: 40px;
-      background: rgba(59, 130, 246, 0.3);
-      border-radius: 50%;
-      animation: pulse 2s infinite;
-      z-index: -1;
-    }
-    
-    @keyframes pulse {
-      0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
-      100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
-    }
-
-    /* Botón flotante para salir */
-    .exit-nav-btn {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      background: white;
-      color: #ef4444;
-      width: 50px;
-      height: 50px;
-      border-radius: 50%;
+    /* Marcadores personalizados */
+    .marker-icon { 
+      border-radius: 50%; 
+      border: 3px solid white; 
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.5rem;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      cursor: pointer;
-      z-index: 2000;
-      pointer-events: auto;
+      color: white;
+      font-weight: bold;
+      font-size: 11px;
+      transition: transform 0.2s;
     }
-
-    /* Estilo para la ruta en modo Waze */
-    .leaflet-routing-container { display: none !important; }
+    .marker-icon:hover { transform: scale(1.2); }
+    .marker-adt { background-color: #ef4444; }
+    .marker-lapos { background-color: #3b82f6; }
+    .marker-iplan { background-color: #10b981; }
+    .marker-prosegur { background-color: #f59e0b; }
     
     /* Scrollbar personalizado */
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: #f1f1f1; }
-    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+    /* Estilo para opciones de select con color */
+    option.service-opt-adt { color: #ef4444; font-weight: bold; }
+    option.service-opt-lapos { color: #3b82f6; font-weight: bold; }
+    option.service-opt-iplan { color: #10b981; font-weight: bold; }
+    option.service-opt-prosegur { color: #f59e0b; font-weight: bold; }
   </style>
 </head>
-<body>
+<body class="bg-gray-50">
 
-  <!-- ================= DASHBOARD UI (Administración) ================= -->
-  <div id="dashboard" class="dashboard-ui">
-    <!-- Header -->
-    <header class="bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg sticky top-0 z-50">
-      <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+  <!-- Header -->
+  <header class="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 text-white shadow-lg">
+    <div class="container mx-auto px-4 py-4">
+      <div class="flex items-center justify-between">
         <div class="flex items-center space-x-3">
-          <i class="fas fa-satellite-dish text-2xl"></i>
+          <i class="fas fa-map-marked-alt text-3xl"></i>
           <div>
-            <h1 class="text-xl font-bold leading-tight">TrackPro GPS</h1>
-            <p class="text-xs opacity-80">Rosario, Santa Fe</p>
+            <h1 class="text-2xl font-bold">Mapa Interactivo de Clientes</h1>
+            <p class="text-sm opacity-90">Rosario, Santa Fe, Argentina</p>
           </div>
         </div>
-        <div class="text-right">
-           <span class="bg-blue-600 px-2 py-1 rounded text-xs font-bold" id="total-db-clients">34</span>
+        <div class="text-right hidden md:block">
+          <div class="text-3xl font-bold" id="total-clients">34</div>
+          <div class="text-sm opacity-90">Ubicaciones Verificadas</div>
         </div>
       </div>
-    </header>
+    </div>
+  </header>
 
-    <!-- Contenido Dashboard -->
-    <div class="container mx-auto px-4 py-6 space-y-6 max-w-4xl">
-      
-      <!-- Filtros y Controles -->
-      <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4">
+  <!-- Panel de Control -->
+  <div class="bg-white shadow-md border-b sticky top-0 z-50">
+    <div class="container mx-auto px-4 py-4">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        
+        <!-- Filtro por Servicio -->
         <div>
-          <label class="text-xs font-bold text-gray-500 uppercase tracking-wide">Servicio</label>
-          <select id="filter-servicio" class="w-full mt-1 p-3 border border-gray-300 rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none">
+          <label class="block text-sm font-semibold text-gray-700 mb-2">
+            <i class="fas fa-building mr-2"></i>Servicio
+          </label>
+          <select id="filter-servicio" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white">
             <option value="">Todos los servicios (34)</option>
-            <option value="ADT-JC">ADT-JC (4)</option>
-            <option value="LAPOS">LAPOS (17)</option>
-            <option value="IPLAN">IPLAN (3)</option>
-            <option value="PROSEGUR AR">PROSEGUR AR (10)</option>
+            <option value="ADT-JC" class="service-opt-adt">🔴 ADT-JC (4)</option>
+            <option value="LAPOS" class="service-opt-lapos">🔵 LAPOS (17)</option>
+            <option value="IPLAN" class="service-opt-iplan">🟢 IPLAN (3)</option>
+            <option value="PROSEGUR AR" class="service-opt-prosegur">🟡 PROSEGUR AR (10)</option>
           </select>
         </div>
+
+        <!-- Filtro por Estado -->
         <div>
-          <label class="text-xs font-bold text-gray-500 uppercase tracking-wide">Estado / Tipo</label>
-          <select id="filter-estado" class="w-full mt-1 p-3 border border-gray-300 rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none">
+          <label class="block text-sm font-semibold text-gray-700 mb-2">
+            <i class="fas fa-info-circle mr-2"></i>Estado / Tipo
+          </label>
+          <select id="filter-estado" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white">
             <option value="">Todos los estados</option>
             <option value="PRIMERA">PRIMERA (9)</option>
             <option value="SEGUNDA">SEGUNDA (1)</option>
@@ -225,717 +121,310 @@
             <option value="Sin especificar">Sin especificar (8)</option>
           </select>
         </div>
+
+        <!-- Botones de Acción -->
         <div class="flex items-end space-x-2">
-          <button onclick="resetFilters()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl text-sm font-bold transition-colors">
-            <i class="fas fa-undo mr-1"></i> Reset
+          <button onclick="resetFilters()" class="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-medium">
+            <i class="fas fa-undo mr-2"></i>Resetear
           </button>
-          <button onclick="exportCSV()" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl text-sm font-bold shadow-md transition-colors">
-            <i class="fas fa-file-csv mr-1"></i> CSV
+          <button onclick="centerMap()" class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium">
+            <i class="fas fa-compress-arrows-alt mr-2"></i>Encuadrar
+          </button>
+          <button onclick="exportCSV()" class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium">
+            <i class="fas fa-download mr-2"></i>Exportar CSV
           </button>
         </div>
-      </div>
-
-      <!-- Selector de Ruta -->
-      <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
-        <h3 class="font-bold text-gray-800 mb-4 text-lg flex items-center">
-          <i class="fas fa-route mr-2 text-blue-600"></i> Planificación de Ruta
-        </h3>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div>
-             <label class="text-xs font-bold text-gray-500 uppercase tracking-wide">Punto de Inicio</label>
-             <div class="flex space-x-2 mt-1">
-               <input type="text" id="start-address" placeholder="Ej: Mi Casa, San Martin 123" class="flex-1 p-3 border border-gray-300 rounded-xl bg-gray-50 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-               <button onclick="geocodeStartAddress()" class="bg-blue-100 text-blue-700 px-3 rounded-xl hover:bg-blue-200"><i class="fas fa-search"></i></button>
-             </div>
-             <p class="text-xs text-gray-400 mt-1 ml-1">O selecciona un cliente como inicio</p>
-          </div>
-          <div class="flex items-end">
-             <button onclick="calculateRoute()" id="btn-calc" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold shadow-lg transition-transform active:scale-95 flex items-center justify-center">
-               <i class="fas fa-calculator mr-2"></i> Calcular Ruta Óptima
-             </button>
-          </div>
-        </div>
-
-        <div id="route-stats" class="hidden bg-blue-50 p-4 rounded-xl border border-blue-100 mb-4 grid grid-cols-3 gap-2 text-center">
-          <div>
-            <div class="text-xs text-blue-600 font-bold uppercase">Distancia</div>
-            <div class="text-lg font-black text-blue-800"><span id="stat-dist">0</span> km</div>
-          </div>
-          <div>
-            <div class="text-xs text-blue-600 font-bold uppercase">Tiempo</div>
-            <div class="text-lg font-black text-blue-800"><span id="stat-time">0</span> min</div>
-          </div>
-          <div>
-            <div class="text-xs text-blue-600 font-bold uppercase">Combustible</div>
-            <div class="text-lg font-black text-blue-800">$<span id="stat-cost">0</span></div>
-          </div>
-        </div>
-
-        <!-- Lista de Paradas -->
-        <div class="mb-4">
-          <div class="flex justify-between items-center mb-2">
-            <span class="text-sm font-bold text-gray-700">Paradas Seleccionadas (<span id="count-selected">0</span>)</span>
-            <button onclick="toggleSelectionMode()" id="btn-select-mode" class="text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg hover:bg-purple-200 font-semibold transition-colors">
-              <i class="fas fa-mouse-pointer mr-1"></i> Seleccionar en Mapa
-            </button>
-          </div>
-          <div id="waypoints-list" class="h-40 overflow-y-auto border border-gray-200 rounded-xl bg-gray-50 p-2 text-sm space-y-1 custom-scrollbar">
-            <p class="text-gray-400 italic text-center py-8">Haz clic en "Seleccionar en Mapa" y toca los marcadores...</p>
-          </div>
-        </div>
-
-        <!-- Botones de Acción Final -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-           <button onclick="exportToGoogleMaps()" class="bg-red-500 hover:bg-red-600 text-white py-4 rounded-xl font-bold shadow-md transition-colors flex items-center justify-center">
-             <i class="fab fa-google mr-2"></i> Abrir en Google Maps
-           </button>
-           <button onclick="startWazeMode()" id="btn-start-waze" class="bg-green-600 hover:bg-green-700 text-white py-4 rounded-xl font-bold shadow-lg transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center" disabled>
-             <i class="fas fa-location-arrow mr-2"></i> INICIAR GPS (WAZE)
-           </button>
-        </div>
-      </div>
-
-      <!-- Mapa Preview en Dashboard -->
-      <div class="bg-white p-2 rounded-2xl shadow-sm border border-gray-200">
-        <div id="mini-map" class="h-64 w-full rounded-xl bg-gray-100 z-0"></div>
-      </div>
-      
-      <div class="text-center text-xs text-gray-400 pb-4">
-        TrackPro GPS v2.0 · Datos verificados · Rosario, Argentina
       </div>
     </div>
   </div>
 
-  <!-- ================= NAVIGATION UI (Waze Style) ================= -->
-  <div id="navigation-interface" class="navigation-ui">
+  <!-- Estadísticas Rápidas -->
+  <div class="container mx-auto px-4 py-4">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-white rounded-lg shadow p-4 text-center fade-in cursor-pointer hover:shadow-lg transition-shadow" onclick="filterByService('ADT-JC')">
+        <div class="text-3xl font-bold text-red-500" id="count-adt">4</div>
+        <div class="text-sm text-gray-600 mt-1 font-medium">ADT-JC</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4 text-center fade-in cursor-pointer hover:shadow-lg transition-shadow" onclick="filterByService('LAPOS')">
+        <div class="text-3xl font-bold text-blue-500" id="count-lapos">17</div>
+        <div class="text-sm text-gray-600 mt-1 font-medium">LAPOS</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4 text-center fade-in cursor-pointer hover:shadow-lg transition-shadow" onclick="filterByService('IPLAN')">
+        <div class="text-3xl font-bold text-green-500" id="count-iplan">3</div>
+        <div class="text-sm text-gray-600 mt-1 font-medium">IPLAN</div>
+      </div>
+      <div class="bg-white rounded-lg shadow p-4 text-center fade-in cursor-pointer hover:shadow-lg transition-shadow" onclick="filterByService('PROSEGUR AR')">
+        <div class="text-3xl font-bold text-yellow-500" id="count-prosegur">10</div>
+        <div class="text-sm text-gray-600 mt-1 font-medium">PROSEGUR AR</div>
+      </div>
+    </div>
     
-    <!-- Botón Salir -->
-    <div class="exit-nav-btn nav-element" onclick="stopWazeMode()">
-      <i class="fas fa-times"></i>
-    </div>
-
-    <!-- Panel Superior (Instrucciones) -->
-    <div class="waze-top-bar nav-element">
-      <div class="instruction-box">
-        <div class="flex items-center">
-          <i id="nav-next-icon" class="fas fa-arrow-up next-turn-icon"></i>
-          <div>
-            <div id="nav-next-dist" class="distance-to-turn">-- m</div>
-            <div id="nav-next-street" class="street-name">Calculando ruta...</div>
-          </div>
-        </div>
-        <div class="text-right pl-4 border-l border-white/20">
-          <div id="nav-arrival-time" class="text-2xl font-bold">--:--</div>
-          <div class="text-xs opacity-80">Llegada est.</div>
-        </div>
-      </div>
-      
-      <!-- Barra de progreso de ruta -->
-      <div class="flex items-center space-x-3 px-1">
-         <div class="flex-1 bg-gray-700/50 h-2 rounded-full overflow-hidden backdrop-blur-sm">
-           <div id="nav-progress-bar" class="bg-green-400 h-full transition-all duration-500" style="width: 0%"></div>
-         </div>
-         <div class="text-xs font-bold text-white bg-black/30 px-2 py-1 rounded">
-           <span id="nav-stop-counter">0/0</span>
-         </div>
-      </div>
-    </div>
-
-    <!-- Espacio central transparente para ver el mapa -->
-    <div class="flex-grow"></div>
-
-    <!-- Panel Inferior (Velocidad y Siguiente Parada) -->
-    <div class="waze-bottom-panel nav-element">
-      <div class="flex items-center justify-between mb-4">
-        
-        <!-- Info Siguiente Cliente -->
-        <div class="flex-1 pr-4 border-r border-gray-200">
-          <div class="flex items-center space-x-2 mb-1">
-             <span class="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded uppercase">Próximo Destino</span>
-             <span id="nav-client-service" class="text-[10px] font-bold text-gray-500 border border-gray-200 px-1 rounded">---</span>
-          </div>
-          <div id="nav-client-name" class="text-xl font-black text-gray-800 leading-tight mb-1">Nombre Cliente</div>
-          <div id="nav-client-addr" class="text-sm text-gray-600 font-medium truncate">Dirección del cliente...</div>
-          <div class="mt-2 flex items-center space-x-3">
-             <a id="nav-call-btn" href="#" class="flex items-center text-xs text-blue-600 font-bold bg-blue-50 px-2 py-1 rounded hover:bg-blue-100">
-               <i class="fas fa-phone-alt mr-1"></i> Llamar
-             </a>
-             <span id="nav-dist-remaining" class="text-xs text-gray-500 font-bold">A -- km</span>
-          </div>
-        </div>
-
-        <!-- Velocímetro Circular -->
-        <div class="pl-4 flex flex-col items-center justify-center w-24">
-          <div class="relative w-20 h-20 flex items-center justify-center">
-            <svg class="w-full h-full transform -rotate-90">
-              <circle cx="40" cy="40" r="36" stroke="#e5e7eb" stroke-width="8" fill="none" />
-              <circle id="speed-circle" cx="40" cy="40" r="36" stroke="#3b82f6" stroke-width="8" fill="none" stroke-dasharray="226" stroke-dashoffset="226" class="transition-all duration-500 ease-out" />
-            </svg>
-            <div class="absolute inset-0 flex flex-col items-center justify-center">
-              <span id="nav-speed" class="text-3xl font-black text-gray-800">0</span>
-              <span class="text-[10px] text-gray-400 font-bold uppercase">km/h</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Botón Siguiente Parada -->
-      <button onclick="nextStop()" class="w-full bg-gray-900 hover:bg-black text-white py-4 rounded-2xl font-bold text-lg shadow-xl active:scale-95 transition-transform flex items-center justify-center space-x-2">
-        <span>Completar Parada</span>
-        <i class="fas fa-check-circle text-green-400 text-xl"></i>
-      </button>
+    <!-- Contador de resultados -->
+    <div class="mt-4 text-center">
+      <span class="inline-block bg-blue-100 text-blue-800 px-4 py-2 rounded-full text-sm font-semibold">
+        <i class="fas fa-eye mr-2"></i>Mostrando <span id="showing-count" class="font-bold">34</span> de 34 ubicaciones verificadas
+      </span>
+      <span class="inline-block bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-semibold ml-2">
+        <i class="fas fa-check-circle mr-2"></i>GPS Verificado
+      </span>
     </div>
   </div>
 
-  <!-- Mapa Global (Usado por ambas interfaces) -->
-  <div id="map"></div>
+  <!-- Mapa -->
+  <div class="container mx-auto px-4 pb-4">
+    <div id="map" class="shadow-lg border-2 border-gray-200"></div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="bg-gray-800 text-white py-4 mt-8">
+    <div class="container mx-auto px-4 text-center">
+      <p class="text-sm">© 2026 Mapa Interactivo de Clientes - Rosario, Santa Fe</p>
+      <p class="text-xs text-gray-400 mt-1">Datos actualizados · 34 ubicaciones verificadas con GPS</p>
+    </div>
+  </footer>
 
   <script>
-    // ================= DATOS ORIGINALES (34 CLIENTES) =================
+    // =========================================================================
+    // DATOS COMPLETOS DE CLIENTES (34 REGISTROS)
+    // =========================================================================
     const clientsData = [
-      {nro: 1, id1: "6436013", id2: "9273153", estadoTipo: "Residencial", servicio: "ADT-JC", codigo1: "89-2B9D", codigo2: "JC.931691", nroExtra: "-", cliente: "Galeano Daniel", direccion: "Iriondo 1377 P:1 D:BE/9 De Julio y 3 De Febrero", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-01-29", tel1: "3416456280", tel2: "3416456280", lote: "J08012026.03", asesor: "PABLO M", lat: -32.94812, lng: -60.67258},
-      {nro: 2, id1: "6438901", id2: "9276542", estadoTipo: "PRIMERA", servicio: "LAPOS", codigo1: "89-3C2A", codigo2: "LP.845621", nroExtra: "-", cliente: "Martinez Sofia", direccion: "San Martin 2145 P:2 D:A/Cordoba y Laprida", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-02-15", tel1: "3415123456", tel2: "", lote: "F15022025.01", asesor: "CARLOS R", lat: -32.94523, lng: -60.66891},
-      {nro: 3, id1: "6441287", id2: "9279834", estadoTipo: "BAJA INACTIVIDAD", servicio: "PROSEGUR AR", codigo1: "89-4D5E", codigo2: "PS.723456", nroExtra: "-", cliente: "Rodriguez Carlos", direccion: "Pellegrini 1823 P:B D:C/Sarmiento y Mendoza", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2024-11-20", tel1: "3416789012", tel2: "3416789012", lote: "N20112024.05", asesor: "LAURA S", lat: -32.95134, lng: -60.67445},
-      {nro: 4, id1: "6443562", id2: "9281245", estadoTipo: "PRIMERA", servicio: "LAPOS", codigo1: "89-5F6G", codigo2: "LP.934567", nroExtra: "-", cliente: "Fernandez Ana", direccion: "Entre Rios 1456 P:3 D:D/Bv Oroño y Avellaneda", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-03-10", tel1: "3415234567", tel2: "", lote: "M10032025.02", asesor: "PABLO M", lat: -32.95678, lng: -60.68123},
-      {nro: 5, id1: "6445891", id2: "9283456", estadoTipo: "PRIMERA", servicio: "IPLAN", codigo1: "89-6H7I", codigo2: "IP.612345", nroExtra: "-", cliente: "Lopez Miguel", direccion: "Santa Fe 2789 P:1 D:A/San Luis y Rioja", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-01-05", tel1: "3416345678", tel2: "3416345678", lote: "E05012025.01", asesor: "MARIA G", lat: -32.94234, lng: -60.66234},
-      {nro: 6, id1: "6448123", id2: "9285678", estadoTipo: "BAJA VOLUNTARIA", servicio: "PROSEGUR AR", codigo1: "89-7J8K", codigo2: "PS.845678", nroExtra: "-", cliente: "Gonzalez Patricia", direccion: "Corrientes 1234 P:2 D:B/Mitre y Urquiza", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2024-12-15", tel1: "3415456789", tel2: "", lote: "D15122024.03", asesor: "JORGE L", lat: -32.95456, lng: -60.67890},
-      {nro: 7, id1: "6450234", id2: "9287890", estadoTipo: "PRIMERA", servicio: "LAPOS", codigo1: "89-8L9M", codigo2: "LP.756789", nroExtra: "-", cliente: "Perez Juan", direccion: "Cordoba 3456 P:4 D:C/Ituzaingó y French", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-02-28", tel1: "3416567890", tel2: "3416567890", lote: "F28022025.04", asesor: "CARLOS R", lat: -32.94890, lng: -60.66567},
-      {nro: 8, id1: "6452345", id2: "9289012", estadoTipo: "PRIMERA", servicio: "ADT-JC", codigo1: "89-9N0O", codigo2: "JC.867890", nroExtra: "-", cliente: "Sanchez Maria", direccion: "Mendoza 2345 P:1 D:A/Bv 27 de Febrero y Alberdi", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-03-15", tel1: "3415678901", tel2: "", lote: "M15032025.01", asesor: "LAURA S", lat: -32.95234, lng: -60.67123},
-      {nro: 9, id1: "6454456", id2: "9291234", estadoTipo: "BAJA INACTIVIDAD", servicio: "LAPOS", codigo1: "89-0P1Q", codigo2: "LP.978901", nroExtra: "-", cliente: "Torres Roberto", direccion: "Sarmiento 1678 P:3 D:D/Laprida y San Juan", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2024-10-10", tel1: "3416789012", tel2: "3416789012", lote: "O10102024.02", asesor: "PABLO M", lat: -32.95567, lng: -60.67678},
-      {nro: 10, id1: "6456567", id2: "9293456", estadoTipo: "PRIMERA", servicio: "PROSEGUR AR", codigo1: "89-1R2S", codigo2: "PS.089012", nroExtra: "-", cliente: "Diaz Laura", direccion: "Rioja 2890 P:2 D:B/Jujuy y Tucuman", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-01-20", tel1: "3415890123", tel2: "", lote: "E20012025.03", asesor: "MARIA G", lat: -32.94345, lng: -60.66345},
-      {nro: 11, id1: "6458678", id2: "9295678", estadoTipo: "PRIMERA", servicio: "LAPOS", codigo1: "89-2T3U", codigo2: "LP.190123", nroExtra: "-", cliente: "Romero Diego", direccion: "Avellaneda 1567 P:1 D:A/Oroño y Pueyrredon", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-02-05", tel1: "3416901234", tel2: "3416901234", lote: "F05022025.02", asesor: "JORGE L", lat: -32.95789, lng: -60.68234},
-      {nro: 12, id1: "6460789", id2: "9297890", estadoTipo: "BAJA VOLUNTARIA", servicio: "PROSEGUR AR", codigo1: "89-3V4W", codigo2: "PS.201234", nroExtra: "-", cliente: "Alvarez Carmen", direccion: "Urquiza 2123 P:4 D:C/Mitre y Corrientes", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2024-11-30", tel1: "3415012345", tel2: "", lote: "N30112024.04", asesor: "CARLOS R", lat: -32.95345, lng: -60.67789},
-      {nro: 13, id1: "6462890", id2: "9299012", estadoTipo: "PRIMERA", servicio: "LAPOS", codigo1: "89-4X5Y", codigo2: "LP.312345", nroExtra: "-", cliente: "Castro Fernando", direccion: "French 1890 P:2 D:B/Ituzaingó y Cordoba", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-03-01", tel1: "3416123456", tel2: "3416123456", lote: "M01032025.03", asesor: "LAURA S", lat: -32.94678, lng: -60.66678},
-      {nro: 14, id1: "6464901", id2: "9301234", estadoTipo: "PRIMERA", servicio: "IPLAN", codigo1: "89-5Z6A", codigo2: "IP.423456", nroExtra: "-", cliente: "Vargas Silvia", direccion: "San Luis 2456 P:1 D:A/Rioja y Santa Fe", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-01-12", tel1: "3415234567", tel2: "", lote: "E12012025.02", asesor: "PABLO M", lat: -32.94123, lng: -60.66123},
-      {nro: 15, id1: "6467012", id2: "9303456", estadoTipo: "BAJA INACTIVIDAD", servicio: "LAPOS", codigo1: "89-6B7C", codigo2: "LP.534567", nroExtra: "-", cliente: "Morales Jorge", direccion: "Laprida 1234 P:3 D:D/Sarmiento y San Juan", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2024-09-25", tel1: "3416345678", tel2: "3416345678", lote: "S25092024.01", asesor: "MARIA G", lat: -32.95678, lng: -60.67567},
-      {nro: 16, id1: "6469123", id2: "9305678", estadoTipo: "PRIMERA", servicio: "PROSEGUR AR", codigo1: "89-7D8E", codigo2: "PS.645678", nroExtra: "-", cliente: "Herrera Lucia", direccion: "Jujuy 2678 P:2 D:B/Tucuman y Rioja", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-02-18", tel1: "3415456789", tel2: "", lote: "F18022025.03", asesor: "JORGE L", lat: -32.94456, lng: -60.66456},
-      {nro: 17, id1: "6471234", id2: "9307890", estadoTipo: "PRIMERA", servicio: "LAPOS", codigo1: "89-8F9G", codigo2: "LP.756789", nroExtra: "-", cliente: "Navarro Pablo", direccion: "Pueyrredon 1789 P:1 D:A/Oroño y Avellaneda", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-03-08", tel1: "3416567890", tel2: "3416567890", lote: "M08032025.02", asesor: "CARLOS R", lat: -32.95890, lng: -60.68345},
-      {nro: 18, id1: "6473345", id2: "9309012", estadoTipo: "BAJA VOLUNTARIA", servicio: "PROSEGUR AR", codigo1: "89-9H0I", codigo2: "PS.867890", nroExtra: "-", cliente: "Acosta Marta", direccion: "Mitre 2345 P:4 D:C/Urquiza y Corrientes", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2024-12-05", tel1: "3415678901", tel2: "", lote: "D05122024.02", asesor: "LAURA S", lat: -32.95234, lng: -60.67890},
-      {nro: 19, id1: "6475456", id2: "9311234", estadoTipo: "PRIMERA", servicio: "ADT-JC", codigo1: "89-0J1K", codigo2: "JC.978901", nroExtra: "-", cliente: "Benitez Ricardo", direccion: "Alberdi 1456 P:1 D:A/Bv 27 de Febrero y Mendoza", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-01-25", tel1: "3416789012", tel2: "3416789012", lote: "E25012025.04", asesor: "PABLO M", lat: -32.95123, lng: -60.67234},
-      {nro: 20, id1: "6477567", id2: "9313456", estadoTipo: "PRIMERA", servicio: "LAPOS", codigo1: "89-1L2M", codigo2: "LP.089012", nroExtra: "-", cliente: "Campos Elena", direccion: "Ituzaingó 2567 P:2 D:B/French y Cordoba", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-02-22", tel1: "3415890123", tel2: "", lote: "F22022025.05", asesor: "MARIA G", lat: -32.94567, lng: -60.66789},
-      {nro: 21, id1: "6479678", id2: "9315678", estadoTipo: "BAJA INACTIVIDAD", servicio: "LAPOS", codigo1: "89-2N3O", codigo2: "LP.190123", nroExtra: "-", cliente: "Flores Alberto", direccion: "San Juan 1678 P:3 D:D/Laprida y Sarmiento", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2024-10-15", tel1: "3416901234", tel2: "3416901234", lote: "O15102024.03", asesor: "JORGE L", lat: -32.95789, lng: -60.67678},
-      {nro: 22, id1: "6481789", id2: "9317890", estadoTipo: "PRIMERA", servicio: "PROSEGUR AR", codigo1: "89-3P4Q", codigo2: "PS.201234", nroExtra: "-", cliente: "Gimenez Rosa", direccion: "Tucuman 2890 P:1 D:A/Jujuy y Rioja", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-03-12", tel1: "3415012345", tel2: "", lote: "M12032025.04", asesor: "CARLOS R", lat: -32.94234, lng: -60.66345},
-      {nro: 23, id1: "6483890", id2: "9319012", estadoTipo: "SEGUNDA", servicio: "LAPOS", codigo1: "89-4R5S", codigo2: "LP.312345", nroExtra: "-", cliente: "Ibarra Manuel", direccion: "Oroño 1234 P:2 D:B/Pueyrredon y Avellaneda", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-01-08", tel1: "3416123456", tel2: "3416123456", lote: "E08012025.05", asesor: "LAURA S", lat: -32.95901, lng: -60.68456},
-      {nro: 24, id1: "6485901", id2: "9321234", estadoTipo: "BAJA INACTIVIDAD", servicio: "PROSEGUR AR", codigo1: "89-5T6U", codigo2: "PS.423456", nroExtra: "-", cliente: "Juarez Beatriz", direccion: "Corrientes 2345 P:4 D:C/Mitre y Urquiza", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2024-11-10", tel1: "3415234567", tel2: "", lote: "N10112024.06", asesor: "PABLO M", lat: -32.95345, lng: -60.67890},
-      {nro: 25, id1: "6488012", id2: "9323456", estadoTipo: "PRIMERA", servicio: "LAPOS", codigo1: "89-6V7W", codigo2: "LP.534567", nroExtra: "-", cliente: "Luna Gustavo", direccion: "French 2456 P:1 D:A/Ituzaingó y Cordoba", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-02-10", tel1: "3416345678", tel2: "3416345678", lote: "F10022025.06", asesor: "MARIA G", lat: -32.94678, lng: -60.66678},
-      {nro: 26, id1: "6490123", id2: "9325678", estadoTipo: "BAJA VOLUNTARIA", servicio: "PROSEGUR AR", codigo1: "89-7X8Y", codigo2: "PS.645678", nroExtra: "-", cliente: "Medina Claudia", direccion: "Mitre 1567 P:3 D:D/Corrientes y Urquiza", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2024-12-20", tel1: "3415456789", tel2: "", lote: "D20122024.04", asesor: "JORGE L", lat: -32.95456, lng: -60.67789},
-      {nro: 27, id1: "6492234", id2: "9327890", estadoTipo: "Residencial", servicio: "ADT-JC", codigo1: "89-8Z9A", codigo2: "JC.756789", nroExtra: "-", cliente: "Nuñez Hector", direccion: "Bv 27 de Febrero 2678 P:2 D:B/Alberdi y Mendoza", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-03-05", tel1: "3416567890", tel2: "3416567890", lote: "M05032025.05", asesor: "CARLOS R", lat: -32.95234, lng: -60.67345},
-      {nro: 28, id1: "6494345", id2: "9329012", estadoTipo: "PRIMERA", servicio: "LAPOS", codigo1: "89-9B0C", codigo2: "LP.867890", nroExtra: "-", cliente: "Ortiz Veronica", direccion: "Pueyrredon 1789 P:1 D:A/Oroño y Avellaneda", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-01-18", tel1: "3415678901", tel2: "", lote: "E18012025.06", asesor: "LAURA S", lat: -32.95890, lng: -60.68345},
-      {nro: 29, id1: "6496456", id2: "9331234", estadoTipo: "BAJA INACTIVIDAD", servicio: "LAPOS", codigo1: "89-0D1E", codigo2: "LP.978901", nroExtra: "-", cliente: "Peralta Oscar", direccion: "Avellaneda 2890 P:4 D:C/Oroño y Pueyrredon", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2024-09-30", tel1: "3416789012", tel2: "3416789012", lote: "S30092024.02", asesor: "PABLO M", lat: -32.95678, lng: -60.68234},
-      {nro: 30, id1: "6498567", id2: "9333456", estadoTipo: "PRIMERA", servicio: "IPLAN", codigo1: "89-1F2G", codigo2: "IP.089012", nroExtra: "-", cliente: "Quiroga Adriana", direccion: "Rioja 1234 P:2 D:B/Santa Fe y Jujuy", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-02-25", tel1: "3415890123", tel2: "", lote: "F25022025.07", asesor: "MARIA G", lat: -32.94345, lng: -60.66234},
-      {nro: 31, id1: "6500678", id2: "9335678", estadoTipo: "BAJA INACTIVIDAD", servicio: "PROSEGUR AR", codigo1: "89-2H3I", codigo2: "PS.190123", nroExtra: "-", cliente: "Ramirez Eduardo", direccion: "Tucuman 2345 P:1 D:A/Jujuy y Rioja", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2024-10-20", tel1: "3416901234", tel2: "3416901234", lote: "O20102024.04", asesor: "JORGE L", lat: -32.94456, lng: -60.66456},
-      {nro: 32, id1: "6502789", id2: "9337890", estadoTipo: "PRIMERA", servicio: "LAPOS", codigo1: "89-3J4K", codigo2: "LP.201234", nroExtra: "-", cliente: "Silva Natalia", direccion: "Ituzaingó 1456 P:3 D:D/French y Cordoba", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-03-18", tel1: "3415012345", tel2: "", lote: "M18032025.06", asesor: "CARLOS R", lat: -32.94567, lng: -60.66789},
-      {nro: 33, id1: "6504890", id2: "9339012", estadoTipo: "RES", servicio: "LAPOS", codigo1: "89-4L5M", codigo2: "LP.312345", nroExtra: "-", cliente: "Tapia Ruben", direccion: "San Juan 2567 P:2 D:B/Laprida y Sarmiento", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-01-30", tel1: "3416123456", tel2: "3416123456", lote: "E30012025.07", asesor: "LAURA S", lat: -32.95678, lng: -60.67567},
-      {nro: 34, id1: "6506901", id2: "9341234", estadoTipo: "RES", servicio: "PROSEGUR AR", codigo1: "89-5N6O", codigo2: "PS.423456", nroExtra: "-", cliente: "Urbina Gabriela", direccion: "Jujuy 1678 P:4 D:C/Tucuman y Rioja", localidad: "Rosario", cp: "2000", provincia: "SANTA FE", fecha: "2025-02-12", tel1: "3415234567", tel2: "", lote: "F12022025.08", asesor: "PABLO M", lat: -32.94234, lng: -60.66345}
+      {nro: 1, cliente: "Galeano Daniel", servicio: "ADT-JC", direccion: "Iriondo 1377", tel1: "3416456280", estadoTipo: "Residencial", asesor: "PABLO M", lat: -32.94812, lng: -60.67258},
+      {nro: 2, cliente: "Martinez Sofia", servicio: "LAPOS", direccion: "San Martin 2145", tel1: "3415123456", estadoTipo: "PRIMERA", asesor: "CARLOS R", lat: -32.94523, lng: -60.66891},
+      {nro: 3, cliente: "Rodriguez Carlos", servicio: "PROSEGUR AR", direccion: "Pellegrini 1823", tel1: "3416789012", estadoTipo: "BAJA INACTIVIDAD", asesor: "LAURA S", lat: -32.95134, lng: -60.67445},
+      {nro: 4, cliente: "Fernandez Ana", servicio: "LAPOS", direccion: "Entre Rios 1456", tel1: "3415234567", estadoTipo: "PRIMERA", asesor: "PABLO M", lat: -32.95678, lng: -60.68123},
+      {nro: 5, cliente: "Lopez Miguel", servicio: "IPLAN", direccion: "Santa Fe 2789", tel1: "3416345678", estadoTipo: "PRIMERA", asesor: "MARIA G", lat: -32.94234, lng: -60.66234},
+      {nro: 6, cliente: "Gonzalez Patricia", servicio: "PROSEGUR AR", direccion: "Corrientes 1234", tel1: "3415456789", estadoTipo: "BAJA VOLUNTARIA", asesor: "JORGE L", lat: -32.95456, lng: -60.67890},
+      {nro: 7, cliente: "Perez Juan", servicio: "LAPOS", direccion: "Cordoba 3456", tel1: "3416567890", estadoTipo: "PRIMERA", asesor: "CARLOS R", lat: -32.94890, lng: -60.66567},
+      {nro: 8, cliente: "Sanchez Maria", servicio: "ADT-JC", direccion: "Mendoza 2345", tel1: "3415678901", estadoTipo: "PRIMERA", asesor: "LAURA S", lat: -32.95234, lng: -60.67123},
+      {nro: 9, cliente: "Torres Roberto", servicio: "LAPOS", direccion: "Sarmiento 1678", tel1: "3416789012", estadoTipo: "BAJA INACTIVIDAD", asesor: "PABLO M", lat: -32.95567, lng: -60.67678},
+      {nro: 10, cliente: "Diaz Laura", servicio: "PROSEGUR AR", direccion: "Rioja 2890", tel1: "3415890123", estadoTipo: "PRIMERA", asesor: "MARIA G", lat: -32.94345, lng: -60.66345},
+      {nro: 11, cliente: "Romero Diego", servicio: "LAPOS", direccion: "Avellaneda 1567", tel1: "3416901234", estadoTipo: "PRIMERA", asesor: "JORGE L", lat: -32.95789, lng: -60.68234},
+      {nro: 12, cliente: "Alvarez Carmen", servicio: "PROSEGUR AR", direccion: "Urquiza 2123", tel1: "3415012345", estadoTipo: "BAJA VOLUNTARIA", asesor: "CARLOS R", lat: -32.95345, lng: -60.67789},
+      {nro: 13, cliente: "Castro Fernando", servicio: "LAPOS", direccion: "French 1890", tel1: "3416123456", estadoTipo: "PRIMERA", asesor: "LAURA S", lat: -32.94678, lng: -60.66678},
+      {nro: 14, cliente: "Vargas Silvia", servicio: "IPLAN", direccion: "San Luis 2456", tel1: "3415234567", estadoTipo: "PRIMERA", asesor: "PABLO M", lat: -32.94123, lng: -60.66123},
+      {nro: 15, cliente: "Morales Jorge", servicio: "LAPOS", direccion: "Laprida 1234", tel1: "3416345678", estadoTipo: "BAJA INACTIVIDAD", asesor: "MARIA G", lat: -32.95678, lng: -60.67567},
+      {nro: 16, cliente: "Herrera Lucia", servicio: "PROSEGUR AR", direccion: "Jujuy 2678", tel1: "3415456789", estadoTipo: "PRIMERA", asesor: "JORGE L", lat: -32.94456, lng: -60.66456},
+      {nro: 17, cliente: "Navarro Pablo", servicio: "LAPOS", direccion: "Pueyrredon 1789", tel1: "3416567890", estadoTipo: "PRIMERA", asesor: "CARLOS R", lat: -32.95890, lng: -60.68345},
+      {nro: 18, cliente: "Acosta Marta", servicio: "PROSEGUR AR", direccion: "Mitre 2345", tel1: "3415678901", estadoTipo: "BAJA VOLUNTARIA", asesor: "LAURA S", lat: -32.95234, lng: -60.67890},
+      {nro: 19, cliente: "Benitez Ricardo", servicio: "ADT-JC", direccion: "Alberdi 1456", tel1: "3416789012", estadoTipo: "PRIMERA", asesor: "PABLO M", lat: -32.95123, lng: -60.67234},
+      {nro: 20, cliente: "Campos Elena", servicio: "LAPOS", direccion: "Ituzaingó 2567", tel1: "3415890123", estadoTipo: "PRIMERA", asesor: "MARIA G", lat: -32.94567, lng: -60.66789},
+      {nro: 21, cliente: "Flores Alberto", servicio: "LAPOS", direccion: "San Juan 1678", tel1: "3416901234", estadoTipo: "BAJA INACTIVIDAD", asesor: "JORGE L", lat: -32.95789, lng: -60.67678},
+      {nro: 22, cliente: "Gimenez Rosa", servicio: "PROSEGUR AR", direccion: "Tucuman 2890", tel1: "3415012345", estadoTipo: "PRIMERA", asesor: "CARLOS R", lat: -32.94234, lng: -60.66345},
+      {nro: 23, cliente: "Ibarra Manuel", servicio: "LAPOS", direccion: "Oroño 1234", tel1: "3416123456", estadoTipo: "SEGUNDA", asesor: "LAURA S", lat: -32.95901, lng: -60.68456},
+      {nro: 24, cliente: "Juarez Beatriz", servicio: "PROSEGUR AR", direccion: "Corrientes 2345", tel1: "3415234567", estadoTipo: "BAJA INACTIVIDAD", asesor: "PABLO M", lat: -32.95345, lng: -60.67890},
+      {nro: 25, cliente: "Luna Gustavo", servicio: "LAPOS", direccion: "French 2456", tel1: "3416345678", estadoTipo: "PRIMERA", asesor: "MARIA G", lat: -32.94678, lng: -60.66678},
+      {nro: 26, cliente: "Medina Claudia", servicio: "PROSEGUR AR", direccion: "Mitre 1567", tel1: "3415456789", estadoTipo: "BAJA VOLUNTARIA", asesor: "JORGE L", lat: -32.95456, lng: -60.67789},
+      {nro: 27, cliente: "Nuñez Hector", servicio: "ADT-JC", direccion: "Bv 27 de Febrero 2678", tel1: "3416567890", estadoTipo: "Residencial", asesor: "CARLOS R", lat: -32.95234, lng: -60.67345},
+      {nro: 28, cliente: "Ortiz Veronica", servicio: "LAPOS", direccion: "Pueyrredon 1789", tel1: "3415678901", estadoTipo: "PRIMERA", asesor: "LAURA S", lat: -32.95890, lng: -60.68345},
+      {nro: 29, cliente: "Peralta Oscar", servicio: "LAPOS", direccion: "Avellaneda 2890", tel1: "3416789012", estadoTipo: "BAJA INACTIVIDAD", asesor: "PABLO M", lat: -32.95678, lng: -60.68234},
+      {nro: 30, cliente: "Quiroga Adriana", servicio: "IPLAN", direccion: "Rioja 1234", tel1: "3415890123", estadoTipo: "PRIMERA", asesor: "MARIA G", lat: -32.94345, lng: -60.66234},
+      {nro: 31, cliente: "Ramirez Eduardo", servicio: "PROSEGUR AR", direccion: "Tucuman 2345", tel1: "3416901234", estadoTipo: "BAJA INACTIVIDAD", asesor: "JORGE L", lat: -32.94456, lng: -60.66456},
+      {nro: 32, cliente: "Silva Natalia", servicio: "LAPOS", direccion: "Ituzaingó 1456", tel1: "3415012345", estadoTipo: "PRIMERA", asesor: "CARLOS R", lat: -32.94567, lng: -60.66789},
+      {nro: 33, cliente: "Tapia Ruben", servicio: "LAPOS", direccion: "San Juan 2567", tel1: "3416123456", estadoTipo: "RES", asesor: "LAURA S", lat: -32.95678, lng: -60.67567},
+      {nro: 34, cliente: "Urbina Gabriela", servicio: "PROSEGUR AR", direccion: "Jujuy 1678", tel1: "3415234567", estadoTipo: "RES", asesor: "PABLO M", lat: -32.94234, lng: -60.66345}
     ];
 
-    // ================= VARIABLES GLOBALES =================
-    let map, miniMap;
+    let map;
     let markers = [];
-    let selectedWaypoints = [];
-    let optimizedRoute = [];
-    let routingControl = null;
-    let selectionMode = false;
-    let customStartPoint = null;
-    
-    // Variables GPS/Waze
-    let isWazeMode = false;
-    let watchId = null;
-    let userMarker = null;
-    let currentStopIndex = 0;
-    let userHeading = 0;
-    let userSpeed = 0;
+    let filteredData = [...clientsData];
 
-    // ================= INICIALIZACIÓN =================
-    function init() {
-      // Inicializar Mini Mapa (Dashboard)
-      miniMap = L.map('mini-map').setView([-32.9520, -60.6680], 13);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(miniMap);
-      loadMarkers(miniMap);
-
-      // El mapa global se inicializa pero está oculto detrás del dashboard
-      map = L.map('map', { zoomControl: false }).setView([-32.9520, -60.6680], 13);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    // Inicializar mapa
+    function initMap() {
+      map = L.map('map').setView([-32.9520, -60.6680], 13);
       
-      // Cargar marcadores en el mapa global también
-      loadMarkers(map);
-      
-      // Configurar filtros iniciales
-      document.getElementById('filter-servicio').addEventListener('change', applyFilters);
-      document.getElementById('filter-estado').addEventListener('change', applyFilters);
-      
-      // IMPORTANTE: Aplicar filtros al inicio para sincronizar contadores
-      applyFilters();
-    }
-
-    function loadMarkers(targetMap) {
-      // Limpiar marcadores existentes si es necesario
-      if (targetMap === miniMap) markers.forEach(m => m.miniMarker && targetMap.removeLayer(m.miniMarker));
-      
-      clientsData.forEach(client => {
-        const icon = L.divIcon({
-          className: 'custom-div-icon',
-          html: `<div style="background-color: ${getServiceColor(client.servicio)}; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
-          iconSize: [14, 14],
-          iconAnchor: [7, 7]
-        });
-        
-        const marker = L.marker([client.lat, client.lng], { icon: icon })
-          .bindPopup(`<b>${client.cliente}</b><br>${client.direccion}<br><span class="text-xs text-gray-500">${client.servicio}</span>`);
-        
-        marker.on('click', () => handleMarkerClick(client, marker));
-        
-        if (targetMap === miniMap) {
-           // Guardamos referencia para miniMap si fuera necesario, pero usaremos el mismo array lógico
-        } else {
-           markers.push({ data: client, marker: marker, selected: false });
-        }
-        targetMap.addLayer(marker);
-      });
-    }
-
-    function getServiceColor(servicio) {
-      const colors = { 'ADT-JC': '#ef4444', 'LAPOS': '#3b82f6', 'IPLAN': '#10b981', 'PROSEGUR AR': '#f59e0b' };
-      return colors[servicio] || '#6b7280';
-    }
-
-    // ================= FILTROS =================
-    function applyFilters() {
-      const servFilter = document.getElementById('filter-servicio').value;
-      const stateFilter = document.getElementById('filter-estado').value;
-      
-      let visibleCount = 0;
-      
-      markers.forEach(m => {
-        const c = m.data;
-        const matchServ = !servFilter || c.servicio === servFilter;
-        const matchState = !stateFilter || (c.estadoTipo && c.estadoTipo.includes(stateFilter));
-        
-        if (matchServ && matchState) {
-          m.marker.addTo(map);
-          visibleCount++;
-        } else {
-          map.removeLayer(m.marker);
-          // Si estaba seleccionado, lo deseleccionamos visualmente pero mantenemos en lista si se desea
-          if (m.selected) {
-             m.marker.getElement().style.opacity = "0.5";
-          }
-        }
-      });
-      
-      document.getElementById('total-db-clients').innerText = visibleCount;
-    }
-
-    function resetFilters() {
-      document.getElementById('filter-servicio').value = "";
-      document.getElementById('filter-estado').value = "";
-      selectedWaypoints = [];
-      updateWaypointsList();
-      markers.forEach(m => {
-        m.marker.addTo(map);
-        m.selected = false;
-        m.marker.getElement().style.transform = "";
-        m.marker.getElement().style.border = "none";
-        m.marker.getElement().style.opacity = "1";
-      });
-      applyFilters();
-    }
-
-    // ================= SELECCIÓN DE RUTA =================
-    function toggleSelectionMode() {
-      selectionMode = !selectionMode;
-      const btn = document.getElementById('btn-select-mode');
-      if (selectionMode) {
-        btn.classList.add('bg-purple-600', 'text-white');
-        btn.classList.remove('bg-purple-100', 'text-purple-700');
-        btn.innerHTML = '<i class="fas fa-check mr-1"></i> Listo';
-        document.body.style.cursor = 'crosshair';
-      } else {
-        btn.classList.remove('bg-purple-600', 'text-white');
-        btn.classList.add('bg-purple-100', 'text-purple-700');
-        btn.innerHTML = '<i class="fas fa-mouse-pointer mr-1"></i> Seleccionar en Mapa';
-        document.body.style.cursor = 'default';
-      }
-    }
-
-    function handleMarkerClick(client, marker) {
-      if (!selectionMode) return;
-      
-      const existing = selectedWaypoints.find(w => w.nro === client.nro);
-      const markerObj = markers.find(m => m.data.nro === client.nro);
-      
-      if (!existing) {
-        selectedWaypoints.push(client);
-        markerObj.selected = true;
-        // Efecto visual
-        marker.getElement().style.transform = "scale(1.3)";
-        marker.getElement().style.border = "2px solid #8b5cf6";
-        marker.getElement().style.borderRadius = "50%";
-      } else {
-        selectedWaypoints = selectedWaypoints.filter(w => w.nro !== client.nro);
-        markerObj.selected = false;
-        marker.getElement().style.transform = "";
-        marker.getElement().style.border = "none";
-      }
-      updateWaypointsList();
-    }
-
-    function updateWaypointsList() {
-      const list = document.getElementById('waypoints-list');
-      const count = document.getElementById('count-selected');
-      const btnWaze = document.getElementById('btn-start-waze');
-      
-      count.innerText = selectedWaypoints.length;
-      list.innerHTML = '';
-      
-      if (selectedWaypoints.length === 0) {
-        list.innerHTML = '<p class="text-gray-400 italic text-center py-8">Haz clic en "Seleccionar en Mapa" y toca los marcadores...</p>';
-        btnWaze.disabled = true;
-        return;
-      }
-
-      selectedWaypoints.forEach((wp, i) => {
-        const div = document.createElement('div');
-        div.className = 'flex justify-between items-center bg-white p-2 rounded shadow-sm border border-gray-100 hover:bg-gray-50';
-        div.innerHTML = `
-          <div class="flex items-center space-x-2 overflow-hidden">
-            <span class="bg-purple-100 text-purple-700 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">${i+1}</span>
-            <div class="truncate">
-               <div class="font-medium text-gray-700 text-sm">${wp.cliente}</div>
-               <div class="text-xs text-gray-500">${wp.servicio}</div>
-            </div>
-          </div>
-          <button onclick="removeWaypoint(${wp.nro})" class="text-red-400 hover:text-red-600 p-1"><i class="fas fa-times"></i></button>
-        `;
-        list.appendChild(div);
-      });
-      
-      btnWaze.disabled = selectedWaypoints.length < 2;
-    }
-
-    function removeWaypoint(nro) {
-      selectedWaypoints = selectedWaypoints.filter(w => w.nro !== nro);
-      const markerObj = markers.find(m => m.data.nro === nro);
-      if (markerObj) {
-        markerObj.selected = false;
-        markerObj.marker.getElement().style.transform = "";
-        markerObj.marker.getElement().style.border = "none";
-      }
-      updateWaypointsList();
-    }
-
-    // ================= CÁLCULO DE RUTA (TSP) =================
-    async function calculateRoute() {
-      if (selectedWaypoints.length < 2) {
-        alert("Selecciona al menos 2 paradas");
-        return;
-      }
-
-      const btn = document.getElementById('btn-calc');
-      const originalText = btn.innerHTML;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Calculando...';
-      btn.disabled = true;
-      
-      // Determinar punto de inicio
-      let start = { lat: -32.9520, lng: -60.6680, cliente: "Centro Rosario" }; // Default
-      
-      if (customStartPoint) {
-        start = customStartPoint;
-      }
-
-      // Optimización TSP
-      optimizedRoute = optimizeTSP(start, selectedWaypoints);
-      
-      // Dibujar ruta en MiniMap
-      if (routingControl) miniMap.removeControl(routingControl);
-      
-      const waypoints = [L.latLng(start.lat, start.lng), ...optimizedRoute.map(w => L.latLng(w.lat, w.lng))];
-      
-      routingControl = L.Routing.control({
-        waypoints: waypoints,
-        router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' }),
-        lineOptions: { styles: [{ color: '#3b82f6', weight: 6 }] },
-        createMarker: function() { return null; },
-        addWaypoints: false,
-        draggableWaypoints: false,
-        fitSelectedRoutes: true,
-        show: false
-      }).addTo(miniMap);
-
-      routingControl.on('routesfound', function(e) {
-        const route = e.routes[0];
-        const distKm = (route.summary.totalDistance / 1000).toFixed(1);
-        const timeMin = Math.round(route.summary.totalTime / 60);
-        
-        document.getElementById('stat-dist').innerText = distKm;
-        document.getElementById('stat-time').innerText = timeMin;
-        document.getElementById('stat-cost').innerText = Math.round((distKm / 12) * 950); // Estimado $950/L, 12km/L
-        document.getElementById('route-stats').classList.remove('hidden');
-        
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-      });
-    }
-
-    function optimizeTSP(start, points) {
-      let unvisited = [...points];
-      let route = [];
-      let current = start;
-      
-      while (unvisited.length > 0) {
-        let nearest = null;
-        let minDist = Infinity;
-        let nearestIndex = -1;
-        
-        unvisited.forEach((p, i) => {
-          // Distancia euclidiana simple para ordenamiento rápido
-          const d = Math.sqrt(Math.pow(p.lat - current.lat, 2) + Math.pow(p.lng - current.lng, 2));
-          if (d < minDist) {
-            minDist = d;
-            nearest = p;
-            nearestIndex = i;
-          }
-        });
-        
-        route.push(nearest);
-        current = { lat: nearest.lat, lng: nearest.lng };
-        unvisited.splice(nearestIndex, 1);
-      }
-      return route;
-    }
-
-    function geocodeStartAddress() {
-       const addr = document.getElementById('start-address').value;
-       if (!addr) return;
-       
-       fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr + ', Rosario')}`)
-         .then(res => res.json())
-         .then(data => {
-           if (data && data.length > 0) {
-             customStartPoint = {
-               lat: parseFloat(data[0].lat),
-               lng: parseFloat(data[0].lon),
-               cliente: addr
-             };
-             alert(`Inicio establecido en: ${addr}`);
-             // Añadir marcador temporal en miniMap
-             L.marker([customStartPoint.lat, customStartPoint.lng]).addTo(miniMap).bindPopup("Inicio").openPopup();
-           } else {
-             alert("No se encontró la dirección");
-           }
-         })
-         .catch(err => console.error(err));
-    }
-
-    // ================= MODO WAZE (GPS ILIMITADO) =================
-    function startWazeMode() {
-      if (optimizedRoute.length === 0) calculateRoute();
-      if (optimizedRoute.length === 0) return;
-
-      isWazeMode = true;
-      currentStopIndex = 0;
-      
-      // Cambiar UI
-      document.getElementById('dashboard').classList.add('hidden');
-      document.getElementById('navigation-interface').classList.add('active');
-      
-      // Configurar Mapa Global para Navegación
-      map.invalidateSize();
-      map.setView([optimizedRoute[0].lat, optimizedRoute[0].lng], 15);
-      
-      // Dibujar ruta completa en mapa global (Soporte ilimitado)
-      if (routingControl) map.removeControl(routingControl);
-      
-      let startPoint = customStartPoint || { lat: -32.9520, lng: -60.6680 };
-      const waypoints = [L.latLng(startPoint.lat, startPoint.lng), ...optimizedRoute.map(w => L.latLng(w.lat, w.lng))];
-      
-      routingControl = L.Routing.control({
-        waypoints: waypoints,
-        lineOptions: { styles: [{ color: '#3b82f6', weight: 10, opacity: 0.9, className: 'waze-route-line' }] },
-        createMarker: function() { return null; },
-        show: false,
-        router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' })
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
       }).addTo(map);
 
-      // Iniciar Geolocalización
-      if (navigator.geolocation) {
-        watchId = navigator.geolocation.watchPosition(updatePosition, handleError, {
-          enableHighAccuracy: true,
-          maximumAge: 0,
-          timeout: 10000
-        });
-      } else {
-        alert("Geolocalización no soportada en este navegador");
-      }
+      addMarkers(clientsData);
       
-      updateNavUI();
+      // Aplicar filtros iniciales para asegurar que el contador esté bien
+      applyFilters();
     }
 
-    function stopWazeMode() {
-      isWazeMode = false;
-      if (watchId) navigator.geolocation.clearWatch(watchId);
-      if (userMarker) map.removeLayer(userMarker);
-      
-      document.getElementById('navigation-interface').classList.remove('active');
-      document.getElementById('dashboard').classList.remove('hidden');
-      
-      // Volver al mini mapa
-      setTimeout(() => miniMap.invalidateSize(), 100);
-    }
+    // Agregar marcadores al mapa
+    function addMarkers(data) {
+      // Limpiar marcadores existentes
+      markers.forEach(marker => map.removeLayer(marker));
+      markers = [];
 
-    function updatePosition(position) {
-      const lat = position.coords.latitude;
-      const lng = position.coords.longitude;
-      const speed = position.coords.speed || 0; // m/s
-      const heading = position.coords.heading || 0;
-
-      userSpeed = Math.round(speed * 3.6); // Convertir a km/h
-      userHeading = heading;
-
-      // Actualizar marcador de usuario
-      if (!userMarker) {
-        const icon = L.divIcon({
-          className: 'user-marker-icon',
-          html: '<div class="user-pulse"></div><div class="user-arrow"></div>',
+      data.forEach((client, index) => {
+        const customIcon = L.divIcon({
+          className: `marker-icon marker-${getMarkerClass(client.servicio)}`,
+          html: `<span>${index + 1}</span>`,
           iconSize: [30, 30],
           iconAnchor: [15, 15]
         });
-        userMarker = L.marker([lat, lng], { icon: icon, rotationAngle: heading }).addTo(map);
-      } else {
-        userMarker.setLatLng([lat, lng]);
-        userMarker.setRotationAngle(heading);
-      }
 
-      // Centrar mapa y seguir al usuario
-      map.panTo([lat, lng]);
-      
-      // Actualizar UI de velocidad
-      document.getElementById('nav-speed').innerText = userSpeed;
-      const circleOffset = 226 - (Math.min(userSpeed, 120) / 120 * 226);
-      document.getElementById('speed-circle').style.strokeDashoffset = circleOffset;
-      
-      // Calcular distancia a la parada actual
-      if (currentStopIndex < optimizedRoute.length) {
-         const target = optimizedRoute[currentStopIndex];
-         const dist = calculateDistance(lat, lng, target.lat, target.lng);
-         document.getElementById('nav-dist-remaining').innerText = `A ${dist.toFixed(1)} km`;
-         
-         // Vibrar si está muy cerca (< 50m)
-         if (dist < 0.05 && navigator.vibrate) {
-            // Solo vibrar una vez cada cierto tiempo podría ser mejor, pero esto es básico
-         }
-      }
-    }
-
-    function handleError(error) {
-      console.warn('ERROR GPS: ' + error.message);
-    }
-
-    function updateNavUI() {
-      if (currentStopIndex >= optimizedRoute.length) {
-        alert("🎉 ¡Ruta completada exitosamente!");
-        stopWazeMode();
-        return;
-      }
-
-      const stop = optimizedRoute[currentStopIndex];
-      document.getElementById('nav-client-name').innerText = stop.cliente;
-      document.getElementById('nav-client-addr').innerText = stop.direccion;
-      document.getElementById('nav-client-service').innerText = stop.servicio;
-      document.getElementById('nav-call-btn').href = `tel:${stop.tel1}`;
-      
-      document.getElementById('nav-stop-counter').innerText = `${currentStopIndex + 1}/${optimizedRoute.length}`;
-      
-      // Progreso barra
-      const pct = ((currentStopIndex) / optimizedRoute.length) * 100;
-      document.getElementById('nav-progress-bar').style.width = `${pct}%`;
-      
-      // Hora llegada estimada (simple: distancia restante / 30kmh promedio)
-      // En una app real usaríamos la API de routing para el tiempo restante exacto
-      let remainingDist = 0;
-      for(let i=currentStopIndex; i<optimizedRoute.length; i++) {
-         // Estimación muy burda para la UI
-         remainingDist += 1; 
-      }
-      const now = new Date();
-      now.setMinutes(now.getMinutes() + (remainingDist * 2)); 
-      document.getElementById('nav-arrival-time').innerText = now.getHours() + ":" + String(now.getMinutes()).padStart(2, '0');
-    }
-
-    function nextStop() {
-      if (confirm(`¿Confirmar visita a ${optimizedRoute[currentStopIndex].cliente}?`)) {
-         currentStopIndex++;
-         updateNavUI();
-         
-         // Recentrar en nueva parada si existe
-         if (currentStopIndex < optimizedRoute.length) {
-           const next = optimizedRoute[currentStopIndex];
-           map.flyTo([next.lat, next.lng], 16);
-           
-           // Actualizar instrucción de giro (Simulado para demo, idealmente usar steps de OSRM)
-           document.getElementById('nav-next-street').innerText = `Ir hacia: ${next.direccion}`;
-           document.getElementById('nav-next-dist').innerText = "En ruta";
-         } else {
-           document.getElementById('nav-next-street').innerText = "Has llegado al final";
-           document.getElementById('nav-next-dist').innerText = "Fin";
-         }
-      }
-    }
-    
-    // Utilidad: Distancia Haversine
-    function calculateDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371; // Radio tierra km
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                Math.sin(dLon/2) * Math.sin(dLon/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      return R * c;
-    }
-
-    // ================= EXPORTAR =================
-    function exportCSV() {
-      let csv = "Nro,Nombre,Direccion,Servicio,Telefono,Estado,Asesor,Lat,Lng\n";
-      selectedWaypoints.forEach(w => {
-        csv += `${w.nro},"${w.cliente}","${w.direccion}",${w.servicio},${w.tel1},${w.estadoTipo},${w.asesor},${w.lat},${w.lng}\n`;
+        const marker = L.marker([client.lat, client.lng], { icon: customIcon })
+          .addTo(map)
+          .bindPopup(createPopupContent(client));
+        
+        markers.push(marker);
       });
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'ruta_trackpro.csv';
-      a.click();
-    }
-    
-    function exportToGoogleMaps() {
-       if (optimizedRoute.length === 0) { alert("Calcula la ruta primero"); return; }
-       
-       // Google Maps tiene límite de 10 waypoints en URL directa.
-       // Para más de 10, sugerimos KML o dividir.
-       // Aquí generamos una URL hasta el límite seguro o avisamos.
-       
-       let url = "https://www.google.com/maps/dir/?api=1&travelmode=driving";
-       let startPoint = customStartPoint || { lat: -32.9520, lng: -60.6680 };
-       url += `&origin=${startPoint.lat},${startPoint.lng}`;
-       
-       // Tomamos solo los primeros 9 waypoints para la URL (límite seguro)
-       const limit = Math.min(optimizedRoute.length, 9);
-       for(let i=0; i<limit; i++) {
-          url += `&waypoint=${optimizedRoute[i].lat},${optimizedRoute[i].lng}`;
-       }
-       
-       if (optimizedRoute.length > 9) {
-         alert("Google Maps web tiene límite de 10 paradas. Se abrirán las primeras 9. Para la ruta completa usa el GPS interno o exporta a KML.");
-       }
-       
-       window.open(url, '_blank');
     }
 
-    // Iniciar
-    window.onload = init;
+    function getMarkerClass(servicio) {
+      const classes = {
+        'ADT-JC': 'adt',
+        'LAPOS': 'lapos',
+        'IPLAN': 'iplan',
+        'PROSEGUR AR': 'prosegur'
+      };
+      return classes[servicio] || 'default';
+    }
 
+    // Crear contenido del popup
+    function createPopupContent(client) {
+      return `
+        <div class="custom-popup">
+          <div class="popup-title">${client.cliente}</div>
+          <div class="popup-row"><span class="popup-label">Servicio:</span> ${client.servicio}</div>
+          <div class="popup-row"><span class="popup-label">Dirección:</span> ${client.direccion}</div>
+          <div class="popup-row"><span class="popup-label">Teléfono:</span> ${client.tel1}</div>
+          <div class="popup-row"><span class="popup-label">Estado:</span> ${client.estadoTipo || 'Sin especificar'}</div>
+          <div class="popup-row"><span class="popup-label">Asesor:</span> ${client.asesor}</div>
+        </div>
+      `;
+    }
+
+    // Función principal de filtrado
+    function applyFilters() {
+      const servicioFilter = document.getElementById('filter-servicio').value;
+      const estadoFilter = document.getElementById('filter-estado').value;
+
+      // Filtrar datos
+      filteredData = clientsData.filter(client => {
+        const matchServicio = !servicioFilter || client.servicio === servicioFilter;
+        const matchEstado = !estadoFilter || (client.estadoTipo && client.estadoTipo.includes(estadoFilter));
+        return matchServicio && matchEstado;
+      });
+
+      // Actualizar marcadores en el mapa
+      updateMapMarkers();
+      
+      // Actualizar estadísticas
+      updateStats();
+    }
+
+    // Actualizar marcadores visibles
+    function updateMapMarkers() {
+      // Ocultar todos primero
+      markers.forEach(marker => map.removeLayer(marker));
+      
+      // Mostrar solo los filtrados
+      filteredData.forEach(client => {
+        // Encontrar el marcador correspondiente en el array original
+        // Nota: En esta implementación simple, recreamos los marcadores o usamos un mapa de referencia.
+        // Para optimizar, vamos a añadir solo los que coinciden.
+        
+        // Buscamos el índice en el array original para mantener el orden si fuera necesario, 
+        // pero aquí simplemente añadimos los marcadores de los datos filtrados.
+        
+        // Reutilizamos la lógica de addMarkers pero solo para filteredData
+        // Para evitar duplicados o errores, limpiamos y redrawamos es lo más seguro en Leaflet simple
+        
+        const customIcon = L.divIcon({
+          className: `marker-icon marker-${getMarkerClass(client.servicio)}`,
+          html: `<span>${clientsData.indexOf(client) + 1}</span>`, // Usar índice original
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        });
+
+        const marker = L.marker([client.lat, client.lng], { icon: customIcon })
+          .addTo(map)
+          .bindPopup(createPopupContent(client));
+          
+        markers.push(marker);
+      });
+    }
+
+    // Filtrar por servicio desde las tarjetas
+    function filterByService(servicio) {
+      document.getElementById('filter-servicio').value = servicio;
+      applyFilters();
+    }
+
+    // Actualizar estadísticas
+    function updateStats() {
+      const counts = {
+        'ADT-JC': 0,
+        'LAPOS': 0,
+        'IPLAN': 0,
+        'PROSEGUR AR': 0
+      };
+
+      filteredData.forEach(client => {
+        if (counts[client.servicio] !== undefined) {
+          counts[client.servicio]++;
+        }
+      });
+
+      document.getElementById('count-adt').textContent = counts['ADT-JC'];
+      document.getElementById('count-lapos').textContent = counts['LAPOS'];
+      document.getElementById('count-iplan').textContent = counts['IPLAN'];
+      document.getElementById('count-prosegur').textContent = counts['PROSEGUR AR'];
+      
+      document.getElementById('total-clients').textContent = filteredData.length;
+      document.getElementById('showing-count').textContent = filteredData.length;
+    }
+
+    // Resetear filtros
+    function resetFilters() {
+      document.getElementById('filter-servicio').value = '';
+      document.getElementById('filter-estado').value = '';
+      applyFilters();
+    }
+
+    // Centrar mapa en todos los marcadores
+    function centerMap() {
+      if (markers.length > 0) {
+        const group = new L.featureGroup(markers);
+        map.fitBounds(group.getBounds().pad(0.1));
+      }
+    }
+
+    // Exportar a CSV
+    function exportCSV() {
+      const headers = ['Nro', 'Cliente', 'Servicio', 'Dirección', 'Teléfono', 'Estado', 'Asesor', 'Latitud', 'Longitud'];
+      const csvRows = [headers.join(',')];
+
+      filteredData.forEach(client => {
+        const row = [
+          client.nro,
+          `"${client.cliente}"`,
+          client.servicio,
+          `"${client.direccion}"`,
+          client.tel1,
+          client.estadoTipo || '',
+          client.asesor,
+          client.lat,
+          client.lng
+        ];
+        csvRows.push(row.join(','));
+      });
+
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'clientes_rosario.csv';
+      link.click();
+    }
+
+    // Event listeners
+    document.getElementById('filter-servicio').addEventListener('change', applyFilters);
+    document.getElementById('filter-estado').addEventListener('change', applyFilters);
+
+    // Ajustar tamaño del mapa cuando la ventana cambie
+    window.addEventListener('resize', () => {
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 250);
+    });
+
+    // Inicializar
+    window.onload = initMap;
   </script>
 </body>
 </html>
