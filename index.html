@@ -552,7 +552,7 @@
 
     // ================= VARIABLES GLOBALES =================
     let map, miniMap;
-    let markers = [];
+    let markers = []; // Array que almacena { data: clientObj, marker: leafletMarker, selected: bool }
     let selectedWaypoints = [];
     let optimizedRoute = [];
     let routingControl = null;
@@ -572,27 +572,27 @@
       // Inicializar Mini Mapa (Dashboard)
       miniMap = L.map('mini-map').setView([-32.9520, -60.6680], 13);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(miniMap);
-      loadMarkers(miniMap);
-
+      
       // El mapa global se inicializa pero está oculto detrás del dashboard
       map = L.map('map', { zoomControl: false }).setView([-32.9520, -60.6680], 13);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
       
-      // Cargar marcadores en el mapa global también
-      loadMarkers(map);
+      // Cargar marcadores en AMBOS mapas al inicio
+      loadMarkers();
       
-      // Configurar filtros iniciales
+      // Configurar listeners de filtros
       document.getElementById('filter-servicio').addEventListener('change', applyFilters);
       document.getElementById('filter-estado').addEventListener('change', applyFilters);
       
-      // IMPORTANTE: Aplicar filtros al inicio para sincronizar contadores
+      // Aplicar filtros iniciales para asegurar contadores correctos
       applyFilters();
     }
 
-    function loadMarkers(targetMap) {
-      // Limpiar marcadores existentes si es necesario
-      if (targetMap === miniMap) markers.forEach(m => m.miniMarker && targetMap.removeLayer(m.miniMarker));
+    function loadMarkers() {
+      // Limpiar arrays de marcadores existentes
+      markers = [];
       
+      // Crear marcadores para cada cliente y agregarlos a ambos mapas
       clientsData.forEach(client => {
         const icon = L.divIcon({
           className: 'custom-div-icon',
@@ -601,17 +601,19 @@
           iconAnchor: [7, 7]
         });
         
+        // Crear marcador base
         const marker = L.marker([client.lat, client.lng], { icon: icon })
           .bindPopup(`<b>${client.cliente}</b><br>${client.direccion}<br><span class="text-xs text-gray-500">${client.servicio}</span>`);
         
+        // Evento click para selección
         marker.on('click', () => handleMarkerClick(client, marker));
         
-        if (targetMap === miniMap) {
-           // Guardamos referencia para miniMap si fuera necesario, pero usaremos el mismo array lógico
-        } else {
-           markers.push({ data: client, marker: marker, selected: false });
-        }
-        targetMap.addLayer(marker);
+        // Guardar referencia en array global
+        markers.push({ data: client, marker: marker, selected: false });
+        
+        // Agregar a ambos mapas inicialmente (applyFilters se encargará de ocultar/mostrar según corresponda)
+        marker.addTo(map);
+        marker.addTo(miniMap);
       });
     }
 
@@ -620,30 +622,37 @@
       return colors[servicio] || '#6b7280';
     }
 
-    // ================= FILTROS =================
+    // ================= FILTROS (CORREGIDO) =================
     function applyFilters() {
       const servFilter = document.getElementById('filter-servicio').value;
       const stateFilter = document.getElementById('filter-estado').value;
       
       let visibleCount = 0;
       
+      // Iterar sobre TODOS los marcadores guardados
       markers.forEach(m => {
         const c = m.data;
+        
+        // Lógica de coincidencia
         const matchServ = !servFilter || c.servicio === servFilter;
         const matchState = !stateFilter || (c.estadoTipo && c.estadoTipo.includes(stateFilter));
         
         if (matchServ && matchState) {
-          m.marker.addTo(map);
+          // SI COINCIDE: Asegurar que esté en el mapa
+          if (!map.hasLayer(m.marker)) map.addLayer(m.marker);
+          if (!miniMap.hasLayer(m.marker)) miniMap.addLayer(m.marker);
           visibleCount++;
+          
+          // Restaurar opacidad si estaba filtrado antes
+          m.marker.getElement().style.opacity = "1";
         } else {
-          map.removeLayer(m.marker);
-          // Si estaba seleccionado, lo deseleccionamos visualmente pero mantenemos en lista si se desea
-          if (m.selected) {
-             m.marker.getElement().style.opacity = "0.5";
-          }
+          // NO COINCIDE: Remover del mapa
+          if (map.hasLayer(m.marker)) map.removeLayer(m.marker);
+          if (miniMap.hasLayer(m.marker)) miniMap.removeLayer(m.marker);
         }
       });
       
+      // Actualizar contador del header
       document.getElementById('total-db-clients').innerText = visibleCount;
     }
 
@@ -652,14 +661,16 @@
       document.getElementById('filter-estado').value = "";
       selectedWaypoints = [];
       updateWaypointsList();
+      
+      // Restaurar visualmente todos los marcadores
       markers.forEach(m => {
-        m.marker.addTo(map);
         m.selected = false;
         m.marker.getElement().style.transform = "";
         m.marker.getElement().style.border = "none";
         m.marker.getElement().style.opacity = "1";
       });
-      applyFilters();
+      
+      applyFilters(); // Esto volverá a mostrar todos en el mapa
     }
 
     // ================= SELECCIÓN DE RUTA =================
@@ -688,7 +699,7 @@
       if (!existing) {
         selectedWaypoints.push(client);
         markerObj.selected = true;
-        // Efecto visual
+        // Efecto visual de selección
         marker.getElement().style.transform = "scale(1.3)";
         marker.getElement().style.border = "2px solid #8b5cf6";
         marker.getElement().style.borderRadius = "50%";
@@ -1304,11 +1315,9 @@
       
       if (newClients.length > 0) {
         clientsData = [...clientsData, ...newClients];
-        // No actualizamos filteredData aquí para no romper el filtro actual, 
-        // pero sí recargamos los marcadores
-        loadMarkers(map); 
-        loadMarkers(miniMap);
-        applyFilters(); // Re-aplicar filtros para mostrar los nuevos si coinciden
+        // Recargar marcadores completamente para incluir los nuevos
+        loadMarkers();
+        applyFilters(); // Re-aplicar filtros actuales
         
         document.getElementById('import-count').textContent = importedCount;
         document.getElementById('import-results').classList.remove('hidden');
