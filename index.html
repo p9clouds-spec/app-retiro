@@ -28,13 +28,18 @@
   <style>
     body { font-family: 'Inter', sans-serif; overflow: hidden; background-color: #f3f4f6; }
     
-    /* Mapa ocupa toda la pantalla y fuerza altura para evitar errores de renderizado */
+    /* Mapa ocupa toda la pantalla solo cuando está activo */
     #map { 
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
       z-index: 1;
       height: 100vh !important; 
       width: 100vw !important;
+      display: none; /* Oculto por defecto */
+    }
+    
+    #map.active {
+      display: block;
     }
 
     /* Interfaz de Administración (Dashboard) */
@@ -45,11 +50,9 @@
       height: 100vh;
       overflow-y: auto;
       display: block;
-      transition: transform 0.3s ease-in-out;
     }
     
     .dashboard-ui.hidden {
-      transform: translateY(-100%);
       display: none;
     }
 
@@ -204,7 +207,7 @@
 </head>
 <body>
 
-  <!-- ================= DASHBOARD UI (Administración) ================= -->
+  <!-- ================= DASHBOARD UI (Planificación SIN MAPA) ================= -->
   <div id="dashboard" class="dashboard-ui">
     <!-- Header -->
     <header class="bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg sticky top-0 z-50">
@@ -223,7 +226,7 @@
     </header>
 
     <!-- Contenido Dashboard -->
-    <div class="container mx-auto px-4 py-6 space-y-6 max-w-4xl">
+    <div class="container mx-auto px-4 py-6 space-y-6 max-w-4xl pb-24">
       
       <!-- PASO 1: FILTROS Y CONTROLES -->
       <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -276,7 +279,7 @@
                <input type="text" id="start-address" placeholder="Ej: Mi Casa, San Martin 123" class="flex-1 p-3 border border-gray-300 rounded-xl bg-gray-50 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
                <button onclick="geocodeStartAddress()" class="bg-blue-100 text-blue-700 px-3 rounded-xl hover:bg-blue-200"><i class="fas fa-search"></i></button>
              </div>
-             <p class="text-xs text-gray-400 mt-1 ml-1">O selecciona un cliente como inicio</p>
+             <p class="text-xs text-gray-400 mt-1 ml-1">O selecciona un cliente de la lista</p>
           </div>
           <div class="flex items-end">
              <button onclick="calculateRoute()" id="btn-calc" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold shadow-lg transition-transform active:scale-95 flex items-center justify-center">
@@ -300,16 +303,23 @@
           </div>
         </div>
 
-        <!-- Lista de Paradas Seleccionadas -->
+        <!-- Lista de Paradas Seleccionadas (Reemplaza al mapa) -->
         <div class="mb-4">
           <div class="flex justify-between items-center mb-2">
             <span class="text-sm font-bold text-gray-700">Paradas Seleccionadas (<span id="count-selected">0</span>)</span>
-            <button onclick="toggleSelectionMode()" id="btn-select-mode" class="text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg hover:bg-purple-200 font-semibold transition-colors">
-              <i class="fas fa-mouse-pointer mr-1"></i> Seleccionar en Mapa
-            </button>
+            <div class="space-x-2">
+              <button onclick="selectAllVisible()" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg font-semibold transition-colors">
+                <i class="fas fa-check-double mr-1"></i> Seleccionar Visibles
+              </button>
+              <button onclick="clearSelection()" class="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-lg font-semibold transition-colors">
+                <i class="fas fa-trash-alt mr-1"></i> Limpiar
+              </button>
+            </div>
           </div>
-          <div id="waypoints-list" class="h-40 overflow-y-auto border border-gray-200 rounded-xl bg-gray-50 p-2 text-sm space-y-1 custom-scrollbar">
-            <p class="text-gray-400 italic text-center py-8">Haz clic en "Seleccionar en Mapa" y toca los marcadores...</p>
+          
+          <!-- Lista filtrable de clientes -->
+          <div id="clients-list" class="h-64 overflow-y-auto border border-gray-200 rounded-xl bg-gray-50 p-2 text-sm space-y-1 custom-scrollbar">
+            <!-- Los clientes se renderizan aquí dinámicamente -->
           </div>
         </div>
 
@@ -322,11 +332,6 @@
              <i class="fas fa-location-arrow mr-2"></i> INICIAR GPS (WAZE)
            </button>
         </div>
-      </div>
-
-      <!-- Mapa Preview en Dashboard -->
-      <div class="bg-white p-2 rounded-2xl shadow-sm border border-gray-200">
-        <div id="mini-map" class="h-64 w-full rounded-xl bg-gray-100 z-0"></div>
       </div>
       
       <div class="text-center text-xs text-gray-400 pb-4">
@@ -510,7 +515,7 @@
     </div>
   </div>
 
-  <!-- Mapa Global (Usado por ambas interfaces) -->
+  <!-- Mapa Global (Solo visible en modo GPS) -->
   <div id="map"></div>
 
   <script>
@@ -553,12 +558,10 @@
     ];
 
     // ================= VARIABLES GLOBALES =================
-    let map, miniMap;
-    let markers = []; // Array que almacena { data: clientObj, marker: leafletMarker, selected: bool }
+    let map;
     let selectedWaypoints = [];
     let optimizedRoute = [];
     let routingControl = null;
-    let selectionMode = false;
     let customStartPoint = null;
     
     // Variables GPS/Waze
@@ -571,52 +574,12 @@
 
     // ================= INICIALIZACIÓN =================
     function init() {
-      // Inicializar Mini Mapa (Dashboard)
-      miniMap = L.map('mini-map').setView([-32.9520, -60.6680], 13);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(miniMap);
-      
-      // El mapa global se inicializa pero está oculto detrás del dashboard
-      map = L.map('map', { zoomControl: false }).setView([-32.9520, -60.6680], 13);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-      
-      // Cargar marcadores en AMBOS mapas al inicio
-      loadMarkers();
-      
       // Configurar listeners de filtros
       document.getElementById('filter-servicio').addEventListener('change', applyFilters);
       document.getElementById('filter-estado').addEventListener('change', applyFilters);
       
-      // Aplicar filtros iniciales para asegurar contadores correctos
+      // Renderizar lista inicial
       applyFilters();
-    }
-
-    function loadMarkers() {
-      // Limpiar arrays de marcadores existentes
-      markers = [];
-      
-      // Crear marcadores para cada cliente y agregarlos a ambos mapas
-      clientsData.forEach(client => {
-        const icon = L.divIcon({
-          className: 'custom-div-icon',
-          html: `<div style="background-color: ${getServiceColor(client.servicio)}; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
-          iconSize: [14, 14],
-          iconAnchor: [7, 7]
-        });
-        
-        // Crear marcador base
-        const marker = L.marker([client.lat, client.lng], { icon: icon })
-          .bindPopup(`<b>${client.cliente}</b><br>${client.direccion}<br><span class="text-xs text-gray-500">${client.servicio}</span>`);
-        
-        // Evento click para selección
-        marker.on('click', () => handleMarkerClick(client, marker));
-        
-        // Guardar referencia en array global
-        markers.push({ data: client, marker: marker, selected: false });
-        
-        // Agregar a ambos mapas inicialmente (applyFilters se encargará de ocultar/mostrar según corresponda)
-        marker.addTo(map);
-        marker.addTo(miniMap);
-      });
     }
 
     function getServiceColor(servicio) {
@@ -624,141 +587,107 @@
       return colors[servicio] || '#6b7280';
     }
 
-    // ================= FILTROS (CORREGIDO) =================
+    // ================= FILTROS Y LISTA =================
     function applyFilters() {
       const servFilter = document.getElementById('filter-servicio').value;
       const stateFilter = document.getElementById('filter-estado').value;
       
       let visibleCount = 0;
+      const listContainer = document.getElementById('clients-list');
+      listContainer.innerHTML = '';
       
-      // Iterar sobre TODOS los marcadores guardados
-      markers.forEach(m => {
-        const c = m.data;
-        
-        // Lógica de coincidencia
-        const matchServ = !servFilter || c.servicio === servFilter;
-        const matchState = !stateFilter || (c.estadoTipo && c.estadoTipo.includes(stateFilter));
-        
-        if (matchServ && matchState) {
-          // SI COINCIDE: Asegurar que esté en el mapa
-          if (!map.hasLayer(m.marker)) map.addLayer(m.marker);
-          if (!miniMap.hasLayer(m.marker)) miniMap.addLayer(m.marker);
-          visibleCount++;
-          
-          // Restaurar opacidad si estaba filtrado antes
-          m.marker.getElement().style.opacity = "1";
-        } else {
-          // NO COINCIDE: Remover del mapa
-          if (map.hasLayer(m.marker)) map.removeLayer(m.marker);
-          if (miniMap.hasLayer(m.marker)) miniMap.removeLayer(m.marker);
-        }
+      // Filtrar datos
+      const filteredClients = clientsData.filter(client => {
+        const matchServ = !servFilter || client.servicio === servFilter;
+        const matchState = !stateFilter || (client.estadoTipo && client.estadoTipo.includes(stateFilter));
+        return matchServ && matchState;
       });
       
-      // Actualizar contador del header
+      visibleCount = filteredClients.length;
+      
+      // Renderizar lista
+      if (filteredClients.length === 0) {
+        listContainer.innerHTML = '<p class="text-gray-400 italic text-center py-8">No hay clientes que coincidan con los filtros</p>';
+      } else {
+        filteredClients.forEach(client => {
+          const isSelected = selectedWaypoints.some(w => w.nro === client.nro);
+          const div = document.createElement('div');
+          div.className = `flex items-center p-3 rounded-lg border transition-all cursor-pointer ${isSelected ? 'bg-purple-50 border-purple-300' : 'bg-white border-gray-100 hover:bg-gray-50'}`;
+          div.onclick = () => toggleClientSelection(client);
+          
+          div.innerHTML = `
+            <div class="flex-shrink-0 w-3 h-3 rounded-full mr-3" style="background-color: ${getServiceColor(client.servicio)}"></div>
+            <div class="flex-1 min-w-0">
+              <div class="font-medium text-gray-800 text-sm truncate">${client.cliente}</div>
+              <div class="text-xs text-gray-500 truncate">${client.direccion}</div>
+            </div>
+            <div class="flex-shrink-0 ml-2">
+              ${isSelected ? '<i class="fas fa-check-circle text-purple-600"></i>' : '<i class="far fa-circle text-gray-300"></i>'}
+            </div>
+          `;
+          listContainer.appendChild(div);
+        });
+      }
+      
+      // Actualizar contador
       document.getElementById('total-db-clients').innerText = visibleCount;
+      updateButtons();
     }
 
     function resetFilters() {
       document.getElementById('filter-servicio').value = "";
       document.getElementById('filter-estado').value = "";
       selectedWaypoints = [];
-      updateWaypointsList();
-      
-      // Restaurar visualmente todos los marcadores
-      markers.forEach(m => {
-        m.selected = false;
-        m.marker.getElement().style.transform = "";
-        m.marker.getElement().style.border = "none";
-        m.marker.getElement().style.opacity = "1";
-      });
-      
-      applyFilters(); // Esto volverá a mostrar todos en el mapa
+      applyFilters();
     }
 
     // ================= SELECCIÓN DE RUTA =================
-    function toggleSelectionMode() {
-      selectionMode = !selectionMode;
-      const btn = document.getElementById('btn-select-mode');
-      if (selectionMode) {
-        btn.classList.add('bg-purple-600', 'text-white');
-        btn.classList.remove('bg-purple-100', 'text-purple-700');
-        btn.innerHTML = '<i class="fas fa-check mr-1"></i> Listo';
-        document.body.style.cursor = 'crosshair';
-      } else {
-        btn.classList.remove('bg-purple-600', 'text-white');
-        btn.classList.add('bg-purple-100', 'text-purple-700');
-        btn.innerHTML = '<i class="fas fa-mouse-pointer mr-1"></i> Seleccionar en Mapa';
-        document.body.style.cursor = 'default';
-      }
-    }
-
-    function handleMarkerClick(client, marker) {
-      if (!selectionMode) return;
+    function toggleClientSelection(client) {
+      const existingIndex = selectedWaypoints.findIndex(w => w.nro === client.nro);
       
-      const existing = selectedWaypoints.find(w => w.nro === client.nro);
-      const markerObj = markers.find(m => m.data.nro === client.nro);
-      
-      if (!existing) {
+      if (existingIndex === -1) {
         selectedWaypoints.push(client);
-        markerObj.selected = true;
-        // Efecto visual de selección
-        marker.getElement().style.transform = "scale(1.3)";
-        marker.getElement().style.border = "2px solid #8b5cf6";
-        marker.getElement().style.borderRadius = "50%";
       } else {
-        selectedWaypoints = selectedWaypoints.filter(w => w.nro !== client.nro);
-        markerObj.selected = false;
-        marker.getElement().style.transform = "";
-        marker.getElement().style.border = "none";
+        selectedWaypoints.splice(existingIndex, 1);
       }
-      updateWaypointsList();
+      
+      // Re-renderizar para actualizar estados visuales
+      applyFilters();
     }
 
-    function updateWaypointsList() {
-      const list = document.getElementById('waypoints-list');
-      const count = document.getElementById('count-selected');
-      const btnWaze = document.getElementById('btn-start-waze');
-      const btnExport = document.getElementById('btn-export-gmaps');
+    function selectAllVisible() {
+      const servFilter = document.getElementById('filter-servicio').value;
+      const stateFilter = document.getElementById('filter-estado').value;
       
-      count.innerText = selectedWaypoints.length;
-      list.innerHTML = '';
-      
-      if (selectedWaypoints.length === 0) {
-        list.innerHTML = '<p class="text-gray-400 italic text-center py-8">Haz clic en "Seleccionar en Mapa" y toca los marcadores...</p>';
-        btnWaze.disabled = true;
-        btnExport.disabled = true;
-        return;
-      }
-
-      selectedWaypoints.forEach((wp, i) => {
-        const div = document.createElement('div');
-        div.className = 'flex justify-between items-center bg-white p-2 rounded shadow-sm border border-gray-100 hover:bg-gray-50';
-        div.innerHTML = `
-          <div class="flex items-center space-x-2 overflow-hidden">
-            <span class="bg-purple-100 text-purple-700 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">${i+1}</span>
-            <div class="truncate">
-               <div class="font-medium text-gray-700 text-sm">${wp.cliente}</div>
-               <div class="text-xs text-gray-500">${wp.servicio}</div>
-            </div>
-          </div>
-          <button onclick="removeWaypoint(${wp.nro})" class="text-red-400 hover:text-red-600 p-1"><i class="fas fa-times"></i></button>
-        `;
-        list.appendChild(div);
+      clientsData.forEach(client => {
+        const matchServ = !servFilter || client.servicio === servFilter;
+        const matchState = !stateFilter || (client.estadoTipo && client.estadoTipo.includes(stateFilter));
+        
+        if (matchServ && matchState) {
+          if (!selectedWaypoints.some(w => w.nro === client.nro)) {
+            selectedWaypoints.push(client);
+          }
+        }
       });
       
-      btnWaze.disabled = selectedWaypoints.length < 2;
-      btnExport.disabled = selectedWaypoints.length < 2;
+      applyFilters();
     }
 
-    function removeWaypoint(nro) {
-      selectedWaypoints = selectedWaypoints.filter(w => w.nro !== nro);
-      const markerObj = markers.find(m => m.data.nro === nro);
-      if (markerObj) {
-        markerObj.selected = false;
-        markerObj.marker.getElement().style.transform = "";
-        markerObj.marker.getElement().style.border = "none";
-      }
-      updateWaypointsList();
+    function clearSelection() {
+      selectedWaypoints = [];
+      applyFilters();
+    }
+
+    function updateButtons() {
+      const btnWaze = document.getElementById('btn-start-waze');
+      const btnExport = document.getElementById('btn-export-gmaps');
+      const countSpan = document.getElementById('count-selected');
+      
+      countSpan.innerText = selectedWaypoints.length;
+      
+      const hasSelection = selectedWaypoints.length >= 2;
+      btnWaze.disabled = !hasSelection;
+      btnExport.disabled = !hasSelection;
     }
 
     // ================= CÁLCULO DE RUTA (TSP) =================
@@ -783,35 +712,20 @@
       // Optimización TSP
       optimizedRoute = optimizeTSP(start, selectedWaypoints);
       
-      // Dibujar ruta en MiniMap
-      if (routingControl) miniMap.removeControl(routingControl);
-      
-      const waypoints = [L.latLng(start.lat, start.lng), ...optimizedRoute.map(w => L.latLng(w.lat, w.lng))];
-      
-      routingControl = L.Routing.control({
-        waypoints: waypoints,
-        router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' }),
-        lineOptions: { styles: [{ color: '#3b82f6', weight: 6 }] },
-        createMarker: function() { return null; },
-        addWaypoints: false,
-        draggableWaypoints: false,
-        fitSelectedRoutes: true,
-        show: false
-      }).addTo(miniMap);
-
-      routingControl.on('routesfound', function(e) {
-        const route = e.routes[0];
-        const distKm = (route.summary.totalDistance / 1000).toFixed(1);
-        const timeMin = Math.round(route.summary.totalTime / 60);
+      // Simular cálculo (en producción usarías OSRM real aquí también)
+      setTimeout(() => {
+        // Estimación burda para demo
+        const distKm = (optimizedRoute.length * 2.5).toFixed(1);
+        const timeMin = Math.round(distKm * 3);
         
         document.getElementById('stat-dist').innerText = distKm;
         document.getElementById('stat-time').innerText = timeMin;
-        document.getElementById('stat-cost').innerText = Math.round((distKm / 12) * 950); // Estimado $950/L, 12km/L
+        document.getElementById('stat-cost').innerText = Math.round((distKm / 12) * 950);
         document.getElementById('route-stats').classList.remove('hidden');
         
         btn.innerHTML = originalText;
         btn.disabled = false;
-      });
+      }, 800);
     }
 
     function optimizeTSP(start, points) {
@@ -825,7 +739,6 @@
         let nearestIndex = -1;
         
         unvisited.forEach((p, i) => {
-          // Distancia euclidiana simple para ordenamiento rápido
           const d = Math.sqrt(Math.pow(p.lat - current.lat, 2) + Math.pow(p.lng - current.lng, 2));
           if (d < minDist) {
             minDist = d;
@@ -854,11 +767,9 @@
                lng: parseFloat(data[0].lon),
                cliente: addr
              };
-             alert(`Inicio establecido en: ${addr}`);
-             // Añadir marcador temporal en miniMap
-             L.marker([customStartPoint.lat, customStartPoint.lng]).addTo(miniMap).bindPopup("Inicio").openPopup();
+             alert(`✅ Inicio establecido en: ${addr}`);
            } else {
-             alert("No se encontró la dirección");
+             alert("❌ No se encontró la dirección");
            }
          })
          .catch(err => console.error(err));
@@ -872,23 +783,29 @@
       isWazeMode = true;
       currentStopIndex = 0;
       
-      // Cambiar UI
+      // Mostrar mapa y ocultar dashboard
+      document.getElementById('map').classList.add('active');
       document.getElementById('dashboard').classList.add('hidden');
       document.getElementById('navigation-interface').classList.add('active');
       
-      // Configurar Mapa Global para Navegación
-      map.invalidateSize();
-      map.setView([optimizedRoute[0].lat, optimizedRoute[0].lng], 15);
+      // Inicializar mapa solo cuando es visible
+      if (!map) {
+        map = L.map('map', { zoomControl: false }).setView([-32.9520, -60.6680], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+      }
       
-      // Dibujar ruta completa en mapa global (Soporte ilimitado)
-      if (routingControl) map.removeControl(routingControl);
+      // Forzar recálculo de tamaño
+      setTimeout(() => map.invalidateSize(), 100);
       
+      // Dibujar ruta completa
       let startPoint = customStartPoint || { lat: -32.9520, lng: -60.6680 };
       const waypoints = [L.latLng(startPoint.lat, startPoint.lng), ...optimizedRoute.map(w => L.latLng(w.lat, w.lng))];
       
+      if (routingControl) map.removeControl(routingControl);
+      
       routingControl = L.Routing.control({
         waypoints: waypoints,
-        lineOptions: { styles: [{ color: '#3b82f6', weight: 10, opacity: 0.9, className: 'waze-route-line' }] },
+        lineOptions: { styles: [{ color: '#3b82f6', weight: 10, opacity: 0.9 }] },
         createMarker: function() { return null; },
         show: false,
         router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' })
@@ -902,7 +819,7 @@
           timeout: 10000
         });
       } else {
-        alert("Geolocalización no soportada en este navegador");
+        alert("Geolocalización no soportada");
       }
       
       updateNavUI();
@@ -913,23 +830,21 @@
       if (watchId) navigator.geolocation.clearWatch(watchId);
       if (userMarker) map.removeLayer(userMarker);
       
+      // Ocultar mapa y mostrar dashboard
+      document.getElementById('map').classList.remove('active');
       document.getElementById('navigation-interface').classList.remove('active');
       document.getElementById('dashboard').classList.remove('hidden');
-      
-      // Volver al mini mapa
-      setTimeout(() => miniMap.invalidateSize(), 100);
     }
 
     function updatePosition(position) {
       const lat = position.coords.latitude;
       const lng = position.coords.longitude;
-      const speed = position.coords.speed || 0; // m/s
+      const speed = position.coords.speed || 0;
       const heading = position.coords.heading || 0;
 
-      userSpeed = Math.round(speed * 3.6); // Convertir a km/h
+      userSpeed = Math.round(speed * 3.6);
       userHeading = heading;
 
-      // Actualizar marcador de usuario
       if (!userMarker) {
         const icon = L.divIcon({
           className: 'user-marker-icon',
@@ -943,24 +858,16 @@
         userMarker.setRotationAngle(heading);
       }
 
-      // Centrar mapa y seguir al usuario
       map.panTo([lat, lng]);
       
-      // Actualizar UI de velocidad
       document.getElementById('nav-speed').innerText = userSpeed;
       const circleOffset = 226 - (Math.min(userSpeed, 120) / 120 * 226);
       document.getElementById('speed-circle').style.strokeDashoffset = circleOffset;
       
-      // Calcular distancia a la parada actual
       if (currentStopIndex < optimizedRoute.length) {
          const target = optimizedRoute[currentStopIndex];
          const dist = calculateDistance(lat, lng, target.lat, target.lng);
          document.getElementById('nav-dist-remaining').innerText = `A ${dist.toFixed(1)} km`;
-         
-         // Vibrar si está muy cerca (< 50m)
-         if (dist < 0.05 && navigator.vibrate) {
-            // Solo vibrar una vez cada cierto tiempo podría ser mejor, pero esto es básico
-         }
       }
     }
 
@@ -970,7 +877,7 @@
 
     function updateNavUI() {
       if (currentStopIndex >= optimizedRoute.length) {
-        alert("🎉 ¡Ruta completada exitosamente!");
+        alert("🎉 ¡Ruta completada!");
         stopWazeMode();
         return;
       }
@@ -983,17 +890,12 @@
       
       document.getElementById('nav-stop-counter').innerText = `${currentStopIndex + 1}/${optimizedRoute.length}`;
       
-      // Progreso barra
       const pct = ((currentStopIndex) / optimizedRoute.length) * 100;
       document.getElementById('nav-progress-bar').style.width = `${pct}%`;
       
-      // Hora llegada estimada (simple: distancia restante / 30kmh promedio)
-      // En una app real usaríamos la API de routing para el tiempo restante exacto
       let remainingDist = 0;
-      for(let i=currentStopIndex; i<optimizedRoute.length; i++) {
-         // Estimación muy burda para la UI
-         remainingDist += 1; 
-      }
+      for(let i=currentStopIndex; i<optimizedRoute.length; i++) remainingDist += 1;
+      
       const now = new Date();
       now.setMinutes(now.getMinutes() + (remainingDist * 2)); 
       document.getElementById('nav-arrival-time').innerText = now.getHours() + ":" + String(now.getMinutes()).padStart(2, '0');
@@ -1004,12 +906,9 @@
          currentStopIndex++;
          updateNavUI();
          
-         // Recentrar en nueva parada si existe
          if (currentStopIndex < optimizedRoute.length) {
            const next = optimizedRoute[currentStopIndex];
            map.flyTo([next.lat, next.lng], 16);
-           
-           // Actualizar instrucción de giro (Simulado para demo, idealmente usar steps de OSRM)
            document.getElementById('nav-next-street').innerText = `Ir hacia: ${next.direccion}`;
            document.getElementById('nav-next-dist').innerText = "En ruta";
          } else {
@@ -1019,9 +918,8 @@
       }
     }
     
-    // Utilidad: Distancia Haversine
     function calculateDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371; // Radio tierra km
+      const R = 6371;
       const dLat = (lat2 - lat1) * Math.PI / 180;
       const dLon = (lon2 - lon1) * Math.PI / 180;
       const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -1055,9 +953,7 @@
       document.getElementById('option-direct').style.display = totalStops <= 10 ? 'block' : 'none';
       document.getElementById('option-segments').style.display = totalStops > 10 ? 'block' : 'none';
       
-      if (totalStops > 10) {
-        generateSegmentsList();
-      }
+      if (totalStops > 10) generateSegmentsList();
       
       document.getElementById('export-modal').classList.add('active');
     }
@@ -1101,11 +997,7 @@
       
       for (let i = 0; i < optimizedRoute.length; i += chunkSize) {
         const chunk = optimizedRoute.slice(i, i + chunkSize);
-        segments.push({
-          stops: chunk,
-          startIndex: i,
-          endIndex: i + chunk.length - 1
-        });
+        segments.push({ stops: chunk, startIndex: i, endIndex: i + chunk.length - 1 });
       }
       
       return segments;
@@ -1116,13 +1008,8 @@
       const segment = segments[segmentIndex];
       
       let startPoint;
-      
       if (segmentIndex === 0) {
-        if (customStartPoint) {
-          startPoint = customStartPoint;
-        } else {
-          startPoint = { lat: -32.9520, lng: -60.6680 };
-        }
+        startPoint = customStartPoint || { lat: -32.9520, lng: -60.6680 };
       } else {
         const prevSegment = segments[segmentIndex - 1];
         startPoint = prevSegment.stops[prevSegment.stops.length - 1];
@@ -1134,26 +1021,14 @@
 
     function exportGoogleMapsSegments() {
       const segments = createRouteSegments();
-      
       segments.forEach((segment, index) => {
-        setTimeout(() => {
-          openSegmentInMaps(index);
-        }, index * 1000);
+        setTimeout(() => openSegmentInMaps(index), index * 1000);
       });
-      
       alert(`✅ Se abrirán ${segments.length} segmentos de Google Maps`);
     }
 
     function generateGoogleMapsURL(stops, customStart = null) {
-      let startPoint;
-      
-      if (customStart) {
-        startPoint = customStart;
-      } else if (customStartPoint) {
-        startPoint = customStartPoint;
-      } else {
-        startPoint = { lat: -32.9520, lng: -60.6680 };
-      }
+      let startPoint = customStart || customStartPoint || { lat: -32.9520, lng: -60.6680 };
       
       let waypoints = [];
       waypoints.push(`${startPoint.lat}%2C${startPoint.lng}`);
@@ -1167,106 +1042,51 @@
       const waypointsParam = waypoints.slice(1, -1).join('|');
       
       let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}`;
-      
-      if (waypointsParam) {
-        url += `&waypoints=${waypointsParam}`;
-      }
-      
+      if (waypointsParam) url += `&waypoints=${waypointsParam}`;
       url += '&travelmode=driving';
       
       return url;
     }
 
     function exportKML() {
-      let startPoint;
+      let startPoint = customStartPoint || { lat: -32.9520, lng: -60.6680 };
       
-      if (customStartPoint) {
-        startPoint = customStartPoint;
-      } else {
-        startPoint = { lat: -32.9520, lng: -60.6680 };
-      }
-      
-      let kml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-      kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n';
-      kml += '<Document>\n';
+      let kml = '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n';
       kml += `  <name>Ruta Optimizada - ${new Date().toLocaleDateString('es-AR')}</name>\n`;
-      kml += '  <description>Ruta optimizada generada por Optimizador de Rutas</description>\n\n';
+      kml += '  <Style id="routeStyle"><LineStyle><color>ff8b5cf6</color><width>4</width></LineStyle></Style>\n\n';
       
-      kml += '  <Style id="routeStyle">\n';
-      kml += '    <LineStyle>\n';
-      kml += '      <color>ff8b5cf6</color>\n';
-      kml += '      <width>4</width>\n';
-      kml += '    </LineStyle>\n';
-      kml += '  </Style>\n\n';
-      
-      kml += '  <Placemark>\n';
-      kml += '    <name>🚩 Punto de Inicio</name>\n';
-      kml += '    <Point>\n';
-      kml += `      <coordinates>${startPoint.lng},${startPoint.lat}</coordinates>\n`;
-      kml += '    </Point>\n';
-      kml += '  </Placemark>\n\n';
+      kml += '  <Placemark><name>🚩 Punto de Inicio</name><Point>\n';
+      kml += `      <coordinates>${startPoint.lng},${startPoint.lat}</coordinates>\n    </Point></Placemark>\n\n`;
       
       optimizedRoute.forEach((client, index) => {
-        kml += '  <Placemark>\n';
-        kml += `    <name>${index + 1}. ${client.cliente}</name>\n`;
-        kml += `    <description>${client.direccion}\\nTel: ${client.tel1}</description>\n`;
-        kml += '    <Point>\n';
-        kml += `      <coordinates>${client.lng},${client.lat}</coordinates>\n`;
-        kml += '    </Point>\n';
-        kml += '  </Placemark>\n\n';
+        kml += `  <Placemark><name>${index + 1}. ${client.cliente}</name><description>${client.direccion}\\nTel: ${client.tel1}</description><Point>\n`;
+        kml += `      <coordinates>${client.lng},${client.lat}</coordinates>\n    </Point></Placemark>\n\n`;
       });
       
-      kml += '  <Placemark>\n';
-      kml += '    <name>Ruta Completa</name>\n';
-      kml += '    <styleUrl>#routeStyle</styleUrl>\n';
-      kml += '    <LineString>\n';
-      kml += '      <tessellate>1</tessellate>\n';
-      kml += '      <coordinates>\n';
+      kml += '  <Placemark><name>Ruta Completa</name><styleUrl>#routeStyle</styleUrl><LineString><tessellate>1</tessellate><coordinates>\n';
       kml += `        ${startPoint.lng},${startPoint.lat},0\n`;
-      optimizedRoute.forEach(client => {
-        kml += `        ${client.lng},${client.lat},0\n`;
-      });
-      kml += '      </coordinates>\n';
-      kml += '    </LineString>\n';
-      kml += '  </Placemark>\n\n';
-      
-      kml += '</Document>\n';
-      kml += '</kml>';
+      optimizedRoute.forEach(client => kml += `        ${client.lng},${client.lat},0\n`);
+      kml += '      </coordinates></LineString></Placemark>\n\n</Document></kml>';
       
       const blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' });
       const link = document.createElement('a');
-      const timestamp = new Date().toISOString().slice(0,10);
       link.href = URL.createObjectURL(blob);
-      link.download = `ruta_optimizada_${timestamp}.kml`;
+      link.download = `ruta_optimizada_${new Date().toISOString().slice(0,10)}.kml`;
       link.click();
       
       alert('✅ Archivo KML descargado!');
     }
 
     // Modal de importación
-    function openImportModal() {
-      document.getElementById('import-modal').classList.add('active');
-    }
+    function openImportModal() { document.getElementById('import-modal').classList.add('active'); }
+    function closeImportModal() { document.getElementById('import-modal').classList.remove('active'); }
 
-    function closeImportModal() {
-      document.getElementById('import-modal').classList.remove('active');
-    }
-
-    // Importar direcciones
     async function importAddresses() {
       const text = document.getElementById('import-text').value.trim();
-      
-      if (!text) {
-        alert('Por favor, ingresa direcciones');
-        return;
-      }
+      if (!text) { alert('Por favor, ingresa direcciones'); return; }
       
       const lines = text.split('\n').filter(line => line.trim());
-      
-      if (lines.length === 0) {
-        alert('No se encontraron direcciones válidas');
-        return;
-      }
+      if (lines.length === 0) { alert('No se encontraron direcciones válidas'); return; }
       
       const btn = event.target;
       const originalText = btn.innerHTML;
@@ -1281,54 +1101,35 @@
         if (!line || line.startsWith('Nombre') || line.startsWith('nombre')) continue;
         
         const parts = line.split(',').map(p => p.trim());
-        
         if (parts.length >= 2) {
-          const nombre = parts[0];
-          const direccion = parts[1];
-          const servicio = parts[2] || 'Sin especificar';
-          const telefono = parts[3] || '';
-          
           try {
-            const coords = await geocodeAddress(direccion + ', Rosario, Santa Fe, Argentina');
-            
+            const coords = await geocodeAddress(parts[1] + ', Rosario, Santa Fe, Argentina');
             if (coords) {
-              const newClient = {
+              newClients.push({
                 nro: clientsData.length + newClients.length + 1,
-                cliente: nombre,
-                servicio: servicio,
-                direccion: direccion,
-                tel1: telefono,
+                cliente: parts[0],
+                servicio: parts[2] || 'Sin especificar',
+                direccion: parts[1],
+                tel1: parts[3] || '',
                 estadoTipo: 'IMPORTADO',
                 asesor: 'SISTEMA',
                 lat: coords.lat,
                 lng: coords.lng
-              };
-              
-              newClients.push(newClient);
+              });
               importedCount++;
             }
-          } catch (error) {
-            console.error('Error geocodificando:', error);
-          }
-          
+          } catch (error) { console.error('Error geocodificando:', error); }
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
       
       if (newClients.length > 0) {
-        clientsData = [...clientsData, ...newClients];
-        // Recargar marcadores completamente para incluir los nuevos
-        loadMarkers();
-        applyFilters(); // Re-aplicar filtros actuales
-        
+        clientsData.push(...newClients);
+        applyFilters();
         document.getElementById('import-count').textContent = importedCount;
         document.getElementById('import-results').classList.remove('hidden');
-        
         alert(`✅ ${importedCount} direcciones importadas!`);
-        
-        setTimeout(() => {
-          closeImportModal();
-        }, 2000);
+        setTimeout(closeImportModal, 2000);
       } else {
         alert('❌ No se pudieron geolocalizar las direcciones.');
       }
@@ -1337,20 +1138,13 @@
       btn.disabled = false;
     }
 
-    // Geocodificar dirección
     async function geocodeAddress(address) {
       try {
-        const encodedAddress = encodeURIComponent(address);
-        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodedAddress}&limit=1`);
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`);
         const data = await response.json();
-        
         if (data && data.length > 0) {
-          return {
-            lat: parseFloat(data[0].lat),
-            lng: parseFloat(data[0].lon)
-          };
+          return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
         }
-        
         return null;
       } catch (error) {
         console.error('Error en geocodificación:', error);
@@ -1360,7 +1154,6 @@
 
     // Iniciar
     window.onload = init;
-
   </script>
 </body>
 </html>
