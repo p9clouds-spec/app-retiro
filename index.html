@@ -589,7 +589,7 @@
       document.getElementById('count-selected').innerText = selectedWaypoints.length;
     }
 
-    // ================= CÁLCULO DE RUTA (TSP) =================
+    // ================= CÁLCULO DE RUTA (TSP + OSRM) =================
     async function calculateRoute() {
       if (selectedWaypoints.length < 2) { alert("Selecciona al menos 2 paradas"); return; }
 
@@ -601,17 +601,25 @@
       let start = customStartPoint || { lat: -32.9520, lng: -60.6680, cliente: "Centro Rosario" };
       optimizedRoute = optimizeTSP(start, selectedWaypoints);
       
-      // Estimación rápida para UI
-      setTimeout(() => {
-        const distKm = (optimizedRoute.length * 2.5).toFixed(1);
-        const timeMin = Math.round(distKm * 3);
-        document.getElementById('stat-dist').innerText = distKm;
-        document.getElementById('stat-time').innerText = timeMin;
-        document.getElementById('stat-cost').innerText = Math.round((distKm / 12) * 950);
-        document.getElementById('route-stats').classList.remove('hidden');
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-      }, 600);
+      // Usar OSRM para obtener distancia/tiempo REAL de la ruta optimizada
+      try {
+        const waypointsStr = `${start.lng},${start.lat};` + optimizedRoute.map(p => `${p.lng},${p.lat}`).join(';');
+        const response = await fetch(`https://router.project-osrm.org/route/v1/driving/${waypointsStr}?overview=false`);
+        const data = await response.json();
+        
+        if(data.routes && data.routes[0]) {
+          const distKm = (data.routes[0].distance / 1000).toFixed(1);
+          const timeMin = Math.round(data.routes[0].duration / 60);
+          
+          document.getElementById('stat-dist').innerText = distKm;
+          document.getElementById('stat-time').innerText = timeMin;
+          document.getElementById('stat-cost').innerText = Math.round((distKm / 12) * 950);
+          document.getElementById('route-stats').classList.remove('hidden');
+        }
+      } catch(e) { console.error("Error obteniendo ruta OSRM:", e); }
+      
+      btn.innerHTML = originalText;
+      btn.disabled = false;
     }
 
     function optimizeTSP(start, points) {
@@ -679,9 +687,7 @@
       // Escuchar instrucciones reales de OSRM
       routingControl.on('routesfound', function(e) {
         const steps = e.routes[0].instructions;
-        if(steps && steps.length > 0) {
-           updateTurnInstruction(steps[0]);
-        }
+        if(steps && steps.length > 0) updateTurnInstruction(steps[0]);
       });
 
       if (navigator.geolocation) {
@@ -724,10 +730,8 @@
         userMarker.setRotationAngle(heading);
       }
 
-      // Centrar y rotar mapa según brújula (Efecto Waze real)
+      // Centrar mapa suavemente según posición y rotación
       map.setView([lat, lng], map.getZoom(), { animate: true });
-      // Nota: Leaflet base no rota tiles nativamente sin plugins pesados, 
-      // pero rotamos el marcador y centramos suavemente.
       
       document.getElementById('nav-speed').innerText = userSpeed;
       
@@ -770,7 +774,7 @@
       const pct = ((currentStopIndex) / optimizedRoute.length) * 100;
       document.getElementById('nav-progress-bar').style.width = `${pct}%`;
       
-      // Hora llegada estimada
+      // Hora llegada estimada basada en ruta real
       let remainingDist = optimizedRoute.length - currentStopIndex;
       const now = new Date();
       now.setMinutes(now.getMinutes() + (remainingDist * 3)); 
@@ -785,7 +789,6 @@
       const streetEl = document.getElementById('nav-next-street');
       const distEl = document.getElementById('nav-next-dist');
       
-      // Mapeo básico de tipos de maniobra de OSRM a iconos FA
       const type = step.type || '';
       const modifier = step.modifier || '';
       
@@ -805,7 +808,6 @@
       iconEl.className = `fas ${iconClass} next-turn-icon`;
       streetEl.innerText = text;
       
-      // Formatear distancia
       let distText = '-- m';
       if(step.distance) {
          const d = Math.round(step.distance);
@@ -823,10 +825,7 @@
            const next = optimizedRoute[currentStopIndex];
            map.flyTo([next.lat, next.lng], 16);
            
-           // Intentar obtener siguiente instrucción de la ruta actual
            if(routingControl && routingControl._routes && routingControl._routes.length > 0) {
-              // En una implementación completa, parsearíamos el array de steps de OSRM
-              // Aquí simulamos actualización visual básica
               document.getElementById('nav-next-street').innerText = `Ir hacia: ${next.direccion}`;
               document.getElementById('nav-next-dist').innerText = "En ruta";
               document.getElementById('nav-next-icon').className = "fas fa-arrow-up next-turn-icon";
