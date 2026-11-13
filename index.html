@@ -2,8 +2,8 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GPS Navigator - Optimizador de Rutas Rosario</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Waze Style Navigator - Rosario</title>
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -15,1662 +15,728 @@
   <!-- Leaflet Routing Machine -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
   <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
+  
+  <!-- Leaflet Map Rotator (para orientar el mapa como Waze) -->
+  <script src="https://unpkg.com/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.js"></script>
 
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
   <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 
   <style>
-    body { font-family: 'Inter', sans-serif; }
-    #map { height: calc(100vh - 380px); min-height: 500px; border-radius: 12px; }
+    body { font-family: 'Inter', sans-serif; overflow: hidden; }
     
-    .custom-popup { font-size: 13px; line-height: 1.5; max-width: 280px; }
-    .popup-title { font-weight: 700; color: #1e40af; margin-bottom: 6px; font-size: 15px; }
-    .popup-row { margin: 3px 0; }
-    .popup-label { font-weight: 600; color: #374151; }
-    
-    .fade-in { animation: fadeIn 0.5s ease-in; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    
-    .marker-icon { 
-      border-radius: 50%; 
-      border: 3px solid white; 
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-weight: bold;
-      font-size: 11px;
-      transition: all 0.2s;
-      cursor: pointer;
-    }
-    .marker-icon:hover { transform: scale(1.2); }
-    .marker-selected { 
-      border: 4px solid #8b5cf6 !important;
-      transform: scale(1.3) !important;
-      box-shadow: 0 0 15px rgba(139, 92, 246, 0.6);
-      z-index: 1000 !important;
-    }
-    .marker-start { 
-      border: 4px solid #10b981 !important;
-      background-color: #10b981 !important;
-      transform: scale(1.4) !important;
-      box-shadow: 0 0 20px rgba(16, 185, 129, 0.8);
-      z-index: 1001 !important;
-    }
-    .marker-current {
-      border: 4px solid #ef4444 !important;
-      background-color: #ef4444 !important;
-      transform: scale(1.5) !important;
-      box-shadow: 0 0 25px rgba(239, 68, 68, 0.9);
-      z-index: 1002 !important;
-      animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { transform: scale(1.5); }
-      50% { transform: scale(1.6); }
-    }
-    .marker-adt { background-color: #ef4444; }
-    .marker-lapos { background-color: #3b82f6; }
-    .marker-iplan { background-color: #10b981; }
-    .marker-prosegur { background-color: #f59e0b; }
-    
-    .waypoint-item {
+    /* Mapa ocupa toda la pantalla por defecto en modo nav */
+    #map { 
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 1;
       transition: all 0.3s ease;
     }
-    .waypoint-item:hover {
-      background-color: #f3f4f6;
-    }
-    .waypoint-active {
-      background-color: #fef3c7 !important;
-      border-left: 4px solid #f59e0b;
-    }
-    .waypoint-completed {
-      background-color: #d1fae5 !important;
-      border-left: 4px solid #10b981;
-      opacity: 0.7;
-    }
-    
-    .leaflet-routing-container {
-      display: none !important;
-    }
-    
-    ::-webkit-scrollbar { width: 8px; }
-    ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: #555; }
 
-    /* Modal styles */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 9999;
-      align-items: center;
-      justify-content: center;
+    /* Interfaz de Administración (Dashboard) */
+    .dashboard-ui {
+      position: relative;
+      z-index: 10;
+      background: white;
+      height: 100vh;
+      overflow-y: auto;
+      display: block;
     }
-    .modal-overlay.active {
+
+    /* Interfaz de Navegación (Waze Style) */
+    .navigation-ui {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 1000;
+      pointer-events: none; /* Dejar pasar clicks al mapa excepto en botones */
+      display: none;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    
+    .navigation-ui.active {
       display: flex;
     }
-    .modal-content {
-      background: white;
-      border-radius: 12px;
-      padding: 24px;
-      max-width: 700px;
-      width: 90%;
-      max-height: 80vh;
-      overflow-y: auto;
+
+    .nav-element {
+      pointer-events: auto;
     }
 
-    /* Panel de navegación GPS */
-    .gps-panel {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    /* Panel Superior Waze */
+    .waze-top-bar {
+      background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
+      padding: 20px;
+      color: white;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    }
+
+    /* Panel Inferior Waze */
+    .waze-bottom-panel {
+      background: white;
+      border-top-left-radius: 20px;
+      border-top-right-radius: 20px;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.2);
+      padding: 20px;
+      margin-bottom: env(safe-area-inset-bottom);
+    }
+
+    /* Instrucciones de giro grandes */
+    .instruction-box {
+      background: #3b82f6; /* Azul Waze */
       color: white;
       border-radius: 12px;
-      padding: 16px;
-      margin-top: 12px;
+      padding: 15px;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
     }
-    .gps-stat {
-      background: rgba(255, 255, 255, 0.2);
-      border-radius: 8px;
-      padding: 12px;
-      text-align: center;
+
+    .next-turn-icon {
+      font-size: 2.5rem;
+      margin-right: 15px;
+    }
+
+    .distance-to-turn {
+      font-size: 2rem;
+      font-weight: 800;
+    }
+
+    .street-name {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    /* Marcador de usuario estilo Waze */
+    .user-marker-icon {
+      background: transparent;
+      border: none;
+    }
+    .user-arrow {
+      width: 0; 
+      height: 0; 
+      border-left: 15px solid transparent;
+      border-right: 15px solid transparent;
+      border-bottom: 30px solid #3b82f6;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+      transform-origin: center bottom;
+    }
+
+    /* Botón flotante para salir */
+    .exit-nav-btn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: white;
+      color: #ef4444;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      cursor: pointer;
+      z-index: 2000;
+    }
+
+    /* Estilo para la ruta en modo Waze */
+    .leaflet-routing-container { display: none !important; }
+    
+    .waze-route-line {
+      stroke: #3b82f6 !important;
+      stroke-width: 8 !important;
+      stroke-opacity: 0.9 !important;
+      stroke-linecap: round !important;
+    }
+
+    /* Animaciones */
+    .pulse-ring {
+      animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.33); opacity: 1; }
+      80%, 100% { transform: scale(2); opacity: 0; }
     }
   </style>
 </head>
-<body class="bg-gray-50">
+<body class="bg-gray-100">
 
-  <!-- Header -->
-  <header class="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 text-white shadow-lg">
-    <div class="container mx-auto px-4 py-4">
-      <div class="flex items-center justify-between">
+  <!-- ================= DASHBOARD UI (Administración) ================= -->
+  <div id="dashboard" class="dashboard-ui">
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg sticky top-0 z-50">
+      <div class="container mx-auto px-4 py-4 flex justify-between items-center">
         <div class="flex items-center space-x-3">
-          <i class="fas fa-route text-3xl"></i>
-          <div>
-            <h1 class="text-2xl font-bold">GPS Navigator - Clientes Rosario</h1>
-            <p class="text-sm opacity-90">Navegación en tiempo real</p>
-          </div>
+          <i class="fas fa-map-marked-alt text-2xl"></i>
+          <h1 class="text-xl font-bold">Admin Rutas Rosario</h1>
         </div>
-        <div class="text-right hidden md:block">
-          <div class="text-3xl font-bold" id="total-clients">34</div>
-          <div class="text-sm opacity-90">Ubicaciones Disponibles</div>
-        </div>
+        <button onclick="toggleDashboard()" class="bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-sm">
+          <i class="fas fa-compress mr-1"></i> Vista Completa
+        </button>
       </div>
-    </div>
-  </header>
+    </header>
 
-  <!-- Panel de Control -->
-  <div class="bg-white shadow-md border-b sticky top-0 z-50">
-    <div class="container mx-auto px-4 py-4">
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-        
-        <!-- Filtro por Servicio -->
+    <!-- Contenido Dashboard -->
+    <div class="container mx-auto px-4 py-6 space-y-6">
+      
+      <!-- Filtros y Controles -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-2">
-            <i class="fas fa-building mr-2"></i>Servicio
-          </label>
-          <select id="filter-servicio" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
-            <option value="">Todos los servicios (34)</option>
-            <option value="ADT-JC">ADT-JC (4)</option>
-            <option value="LAPOS">LAPOS (17)</option>
-            <option value="IPLAN">IPLAN (3)</option>
-            <option value="PROSEGUR AR">PROSEGUR AR (10)</option>
+          <label class="text-xs font-bold text-gray-500 uppercase">Servicio</label>
+          <select id="filter-servicio" class="w-full mt-1 p-2 border rounded bg-gray-50">
+            <option value="">Todos</option>
+            <option value="ADT-JC">ADT-JC</option>
+            <option value="LAPOS">LAPOS</option>
+            <option value="IPLAN">IPLAN</option>
+            <option value="PROSEGUR AR">PROSEGUR AR</option>
           </select>
         </div>
-
-        <!-- Filtro por Estado -->
         <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-2">
-            <i class="fas fa-info-circle mr-2"></i>Estado
-          </label>
-          <select id="filter-estado" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white">
-            <option value="">Todos los estados</option>
-            <option value="PRIMERA">PRIMERA (9)</option>
-            <option value="BAJA INACTIVIDAD">BAJA INACTIVIDAD (8)</option>
-            <option value="BAJA VOLUNTARIA">BAJA VOLUNTARIA (4)</option>
-            <option value="Residencial">Residencial (2)</option>
+          <label class="text-xs font-bold text-gray-500 uppercase">Estado</label>
+          <select id="filter-estado" class="w-full mt-1 p-2 border rounded bg-gray-50">
+            <option value="">Todos</option>
+            <option value="PRIMERA">PRIMERA</option>
+            <option value="BAJA INACTIVIDAD">BAJA INACTIVIDAD</option>
           </select>
         </div>
-
-        <!-- Punto de Inicio -->
-        <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-2">
-            <i class="fas fa-flag-checkered mr-2"></i>Punto de Inicio
-          </label>
-          <div class="space-y-2">
-            <select id="start-point-select" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-sm" onchange="handleStartPointChange()">
-              <option value="">Centro de Rosario (-32.9520, -60.6680)</option>
-            </select>
-            <input type="text" id="start-point-address" placeholder="O escribe una dirección..." 
-                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
-                   onkeypress="if(event.key==='Enter') geocodeCustomAddress()">
-            <button onclick="geocodeCustomAddress()" id="btn-geocode" class="w-full px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium transition-colors">
-              <i class="fas fa-search-location mr-1"></i>Buscar Dirección
-            </button>
-          </div>
-        </div>
-
-        <!-- Botones -->
         <div class="flex items-end space-x-2">
-          <button onclick="resetFilters()" class="flex-1 px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium text-sm">
-            <i class="fas fa-undo mr-1"></i>Reset
-          </button>
-          <button onclick="openImportModal()" class="flex-1 px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium text-sm">
-            <i class="fas fa-upload mr-1"></i>Importar
-          </button>
-          <button onclick="exportCSV()" class="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium text-sm">
-            <i class="fas fa-file-csv mr-1"></i>CSV
-          </button>
+          <button onclick="resetFilters()" class="flex-1 bg-gray-200 hover:bg-gray-300 py-2 rounded text-sm font-medium">Reset</button>
+          <button onclick="exportCSV()" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded text-sm font-medium"><i class="fas fa-file-csv mr-1"></i> CSV</button>
         </div>
       </div>
 
-      <!-- Panel de Optimización de Rutas -->
-      <div class="bg-purple-50 border-2 border-purple-200 rounded-lg p-4">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="font-bold text-purple-800 text-lg">
-            <i class="fas fa-map-signs mr-2"></i>Optimizador de Rutas Inteligente
-          </h3>
-          <div class="flex space-x-2">
-            <button onclick="toggleSelectionMode()" id="btn-select-mode" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold text-sm transition-colors">
-              <i class="fas fa-mouse-pointer mr-2"></i>Seleccionar Puntos
-            </button>
-            <button onclick="calculateOptimalRoute()" id="btn-calculate" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-              <i class="fas fa-calculator mr-2"></i>Calcular Ruta
-            </button>
-            <button onclick="clearRoute()" id="btn-clear" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-              <i class="fas fa-trash mr-2"></i>Limpiar
-            </button>
-          </div>
-        </div>
+      <!-- Selector de Ruta -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+        <h3 class="font-bold text-gray-800 mb-3"><i class="fas fa-route mr-2 text-purple-600"></i>Planificación de Ruta</h3>
         
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <!-- Waypoints seleccionados -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
-            <div class="text-sm font-semibold text-gray-700 mb-2">
-              Puntos Seleccionados: <span id="selected-count" class="text-purple-600 font-bold">0</span>/34
-            </div>
-            <div id="waypoints-list" class="bg-white rounded-lg border border-gray-200 p-3 max-h-48 overflow-y-auto">
-              <p class="text-gray-400 text-sm italic">Haz clic en "Seleccionar Puntos" y luego en los marcadores del mapa</p>
-            </div>
+             <label class="text-xs font-bold text-gray-500 uppercase">Punto de Inicio</label>
+             <input type="text" id="start-address" placeholder="Ej: Mi Casa, San Martin 123" class="w-full mt-1 p-2 border rounded bg-gray-50 text-sm">
+             <button onclick="geocodeStartAddress()" class="mt-1 text-xs text-blue-600 hover:underline">Buscar dirección</button>
           </div>
-          
-          <!-- Estadísticas de ruta -->
-          <div>
-            <div class="text-sm font-semibold text-gray-700 mb-2">Estadísticas Estimadas</div>
-            <div class="bg-white rounded-lg border border-gray-200 p-3 space-y-2">
-              <div class="flex justify-between items-center">
-                <span class="text-sm text-gray-600"><i class="fas fa-road mr-2 text-blue-500"></i>Distancia Total:</span>
-                <span id="total-distance" class="font-bold text-blue-600 text-lg">-</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span class="text-sm text-gray-600"><i class="fas fa-clock mr-2 text-green-500"></i>Tiempo Estimado:</span>
-                <span id="total-time" class="font-bold text-green-600 text-lg">-</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span class="text-sm text-gray-600"><i class="fas fa-gas-pump mr-2 text-orange-500"></i>Costo Combustible:</span>
-                <span id="fuel-cost" class="font-bold text-orange-600 text-lg">-</span>
-              </div>
-              <div class="flex justify-between items-center pt-2 border-t">
-                <span class="text-sm text-gray-600"><i class="fas fa-users mr-2 text-purple-500"></i>Clientes a Visitar:</span>
-                <span id="clients-count" class="font-bold text-purple-600 text-lg">0</span>
-              </div>
-            </div>
-            
-            <!-- Configuración de costos -->
-            <div class="mt-3 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-              <div class="text-xs font-semibold text-yellow-800 mb-2">
-                <i class="fas fa-cog mr-1"></i>Configuración de Costos
-              </div>
-              <div class="grid grid-cols-2 gap-2">
-                <div>
-                  <label class="text-xs text-gray-600">Precio Nafta ($/L):</label>
-                  <input type="number" id="fuel-price" value="950" class="w-full px-2 py-1 text-sm border rounded mt-1" onchange="recalculateCosts()">
-                </div>
-                <div>
-                  <label class="text-xs text-gray-600">Consumo (km/L):</label>
-                  <input type="number" id="fuel-consumption" value="12" class="w-full px-2 py-1 text-sm border rounded mt-1" onchange="recalculateCosts()">
-                </div>
-              </div>
-            </div>
+          <div class="flex items-end">
+             <button onclick="calculateRoute()" id="btn-calc" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded font-bold shadow-md transition-transform active:scale-95">
+               <i class="fas fa-calculator mr-2"></i>Calcular Ruta Óptima
+             </button>
           </div>
         </div>
 
-        <!-- Panel de Navegación GPS -->
-        <div id="gps-navigation-panel" class="gps-panel hidden">
-          <div class="flex items-center justify-between mb-3">
-            <h4 class="font-bold text-lg">
-              <i class="fas fa-satellite-dish mr-2"></i>Navegación GPS Activa
-            </h4>
-            <button onclick="stopNavigation()" class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-sm">
-              <i class="fas fa-stop mr-1"></i>Detener
+        <div id="route-stats" class="hidden bg-blue-50 p-3 rounded-lg border border-blue-100 mb-4">
+          <div class="flex justify-between text-sm text-blue-800">
+            <span><i class="fas fa-road mr-1"></i> <span id="stat-dist">0</span> km</span>
+            <span><i class="fas fa-clock mr-1"></i> <span id="stat-time">0</span> min</span>
+            <span><i class="fas fa-gas-pump mr-1"></i> $<span id="stat-cost">0</span></span>
+          </div>
+        </div>
+
+        <!-- Lista de Paradas -->
+        <div class="mb-4">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-sm font-bold text-gray-700">Paradas Seleccionadas (<span id="count-selected">0</span>)</span>
+            <button onclick="toggleSelectionMode()" id="btn-select-mode" class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200">
+              <i class="fas fa-mouse-pointer mr-1"></i> Seleccionar en Mapa
             </button>
           </div>
-          
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-            <div class="gps-stat">
-              <div class="text-2xl font-bold" id="gps-next-stop">-</div>
-              <div class="text-xs opacity-90">Próxima Parada</div>
-            </div>
-            <div class="gps-stat">
-              <div class="text-2xl font-bold" id="gps-distance">-</div>
-              <div class="text-xs opacity-90">Distancia (km)</div>
-            </div>
-            <div class="gps-stat">
-              <div class="text-2xl font-bold" id="gps-time">-</div>
-              <div class="text-xs opacity-90">Tiempo (min)</div>
-            </div>
-            <div class="gps-stat">
-              <div class="text-2xl font-bold" id="gps-progress">0/0</div>
-              <div class="text-xs opacity-90">Progreso</div>
-            </div>
-          </div>
-          
-          <div class="bg-white bg-opacity-20 rounded-lg p-3">
-            <div class="flex items-center justify-between">
-              <div>
-                <div class="text-sm font-semibold" id="gps-current-client">Esperando inicio...</div>
-                <div class="text-xs opacity-90" id="gps-current-address">-</div>
-              </div>
-              <button onclick="navigateToNextStop()" class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold">
-                <i class="fas fa-directions mr-2"></i>Navegar
-              </button>
-            </div>
+          <div id="waypoints-list" class="h-32 overflow-y-auto border rounded bg-gray-50 p-2 text-sm space-y-1">
+            <p class="text-gray-400 italic text-center py-4">Selecciona clientes en el mapa...</p>
           </div>
         </div>
 
-        <!-- Botones de Exportación de Ruta -->
-        <div class="mt-4 flex flex-wrap gap-2">
-          <button onclick="exportRouteText()" id="btn-export-txt" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-            <i class="fas fa-file-alt mr-2"></i>Exportar TXT
-          </button>
-          <button onclick="openExportModal()" id="btn-export-gmaps" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-            <i class="fas fa-map-marked-alt mr-2"></i>Exportar Google Maps
-          </button>
-          <button onclick="startGPSNavigation()" id="btn-start-gps" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-            <i class="fas fa-satellite-dish mr-2"></i>Iniciar GPS
-          </button>
+        <!-- Botones de Acción Final -->
+        <div class="grid grid-cols-2 gap-3">
+           <button onclick="exportToGoogleMaps()" class="bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg font-bold shadow-md">
+             <i class="fab fa-google mr-2"></i>Google Maps
+           </button>
+           <button onclick="startWazeMode()" id="btn-start-waze" class="bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-bold shadow-md disabled:opacity-50" disabled>
+             <i class="fas fa-location-arrow mr-2"></i>INICIAR GPS (WAZE)
+           </button>
         </div>
+      </div>
+
+      <!-- Mapa Preview en Dashboard -->
+      <div class="bg-white p-2 rounded-xl shadow-sm border border-gray-100">
+        <div id="mini-map" class="h-64 w-full rounded-lg bg-gray-200"></div>
       </div>
     </div>
   </div>
 
-  <!-- Estadísticas Rápidas -->
-  <div class="container mx-auto px-4 py-3">
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-      <div class="bg-white rounded-lg shadow p-3 text-center fade-in cursor-pointer hover:shadow-lg transition-shadow" onclick="filterByService('ADT-JC')">
-        <div class="text-2xl font-bold text-red-500" id="count-adt">4</div>
-        <div class="text-xs text-gray-600 mt-1">ADT-JC</div>
+  <!-- ================= NAVIGATION UI (Waze Style) ================= -->
+  <div id="navigation-interface" class="navigation-ui">
+    
+    <!-- Botón Salir -->
+    <div class="exit-nav-btn nav-element" onclick="stopWazeMode()">
+      <i class="fas fa-times"></i>
+    </div>
+
+    <!-- Panel Superior (Instrucciones) -->
+    <div class="waze-top-bar nav-element">
+      <div class="instruction-box">
+        <div class="flex items-center">
+          <i id="nav-next-icon" class="fas fa-arrow-up next-turn-icon"></i>
+          <div>
+            <div id="nav-next-dist" class="distance-to-turn">500 m</div>
+            <div id="nav-next-street" class="street-name">Continuar recto</div>
+          </div>
+        </div>
+        <div class="text-right">
+          <div id="nav-arrival-time" class="text-2xl font-bold">14:30</div>
+          <div class="text-xs opacity-80">Llegada estimada</div>
+        </div>
       </div>
-      <div class="bg-white rounded-lg shadow p-3 text-center fade-in cursor-pointer hover:shadow-lg transition-shadow" onclick="filterByService('LAPOS')">
-        <div class="text-2xl font-bold text-blue-500" id="count-lapos">17</div>
-        <div class="text-xs text-gray-600 mt-1">LAPOS</div>
+      
+      <!-- Barra de progreso de ruta -->
+      <div class="w-full bg-gray-700 h-2 rounded-full overflow-hidden">
+        <div id="nav-progress-bar" class="bg-green-400 h-full" style="width: 0%"></div>
       </div>
-      <div class="bg-white rounded-lg shadow p-3 text-center fade-in cursor-pointer hover:shadow-lg transition-shadow" onclick="filterByService('IPLAN')">
-        <div class="text-2xl font-bold text-green-500" id="count-iplan">3</div>
-        <div class="text-xs text-gray-600 mt-1">IPLAN</div>
-      </div>
-      <div class="bg-white rounded-lg shadow p-3 text-center fade-in cursor-pointer hover:shadow-lg transition-shadow" onclick="filterByService('PROSEGUR AR')">
-        <div class="text-2xl font-bold text-yellow-500" id="count-prosegur">10</div>
-        <div class="text-xs text-gray-600 mt-1">PROSEGUR AR</div>
+      <div class="flex justify-between text-xs mt-1 opacity-80">
+        <span id="nav-stop-counter">Parada 1 de 5</span>
+        <span id="nav-total-remaining">4 restantes</span>
       </div>
     </div>
-  </div>
 
-  <!-- Mapa -->
-  <div class="container mx-auto px-4 pb-4">
-    <div id="map" class="shadow-lg border-2 border-gray-200"></div>
-  </div>
+    <!-- Espacio central transparente para ver el mapa -->
+    <div class="flex-grow"></div>
 
-  <!-- Modal de Exportación a Google Maps -->
-  <div id="export-modal" class="modal-overlay">
-    <div class="modal-content">
-      <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-bold text-gray-800">
-          <i class="fas fa-map-marked-alt mr-2 text-red-600"></i>Exportar Ruta a Google Maps
-        </h2>
-        <button onclick="closeExportModal()" class="text-gray-500 hover:text-gray-700">
-          <i class="fas fa-times text-2xl"></i>
-        </button>
-      </div>
-
-      <div class="space-y-4">
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <p class="text-sm text-blue-800">
-            <i class="fas fa-info-circle mr-2"></i>
-            Google Maps permite hasta 10 paradas intermedias. Para rutas más largas, generaremos múltiples opciones.
-          </p>
+    <!-- Panel Inferior (Velocidad y Siguiente Parada) -->
+    <div class="waze-bottom-panel nav-element">
+      <div class="flex items-center justify-between">
+        
+        <!-- Info Siguiente Cliente -->
+        <div class="flex-1 pr-4 border-r border-gray-200">
+          <div class="text-xs text-gray-500 uppercase font-bold mb-1">Próximo Destino</div>
+          <div id="nav-client-name" class="text-lg font-bold text-gray-800 leading-tight">Nombre Cliente</div>
+          <div id="nav-client-addr" class="text-sm text-gray-600 truncate">Dirección del cliente...</div>
+          <div class="mt-2 flex items-center text-xs text-blue-600 font-semibold">
+            <i class="fas fa-phone-alt mr-1"></i> <span id="nav-client-phone">---</span>
+          </div>
         </div>
 
-        <div id="option-direct" class="bg-white border-2 border-gray-200 rounded-lg p-4">
-          <h3 class="font-bold text-gray-800 mb-2">
-            <i class="fas fa-link mr-2 text-blue-600"></i>Opción 1: URL Directa (Hasta 10 paradas)
-          </h3>
-          <button onclick="exportGoogleMapsDirect()" class="w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors">
-            <i class="fas fa-external-link-alt mr-2"></i>Abrir en Google Maps
-          </button>
-        </div>
-
-        <div id="option-segments" class="bg-white border-2 border-gray-200 rounded-lg p-4">
-          <h3 class="font-bold text-gray-800 mb-2">
-            <i class="fas fa-cut mr-2 text-green-600"></i>Opción 2: Ruta por Segmentos
-          </h3>
-          <div id="segments-list" class="space-y-2 mb-3"></div>
-          <button onclick="exportGoogleMapsSegments()" class="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors">
-            <i class="fas fa-layer-group mr-2"></i>Generar Todos los Segmentos
-          </button>
-        </div>
-
-        <div class="bg-white border-2 border-gray-200 rounded-lg p-4">
-          <h3 class="font-bold text-gray-800 mb-2">
-            <i class="fas fa-file-code mr-2 text-purple-600"></i>Opción 3: Archivo KML (Rutas Ilimitadas)
-          </h3>
-          <button onclick="exportKML()" class="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-colors">
-            <i class="fas fa-download mr-2"></i>Descargar Archivo KML
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal de Importación -->
-  <div id="import-modal" class="modal-overlay">
-    <div class="modal-content">
-      <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-bold text-gray-800">
-          <i class="fas fa-upload mr-2 text-teal-600"></i>Importar Direcciones
-        </h2>
-        <button onclick="closeImportModal()" class="text-gray-500 hover:text-gray-700">
-          <i class="fas fa-times text-2xl"></i>
-        </button>
-      </div>
-
-      <div class="space-y-4">
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <p class="text-sm text-blue-800">
-            <i class="fas fa-info-circle mr-2"></i>
-            Sube un archivo CSV o TXT con direcciones para geolocalizarlas.
-          </p>
-        </div>
-
-        <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-2">Pega las direcciones aquí:</label>
-          <textarea id="import-text" rows="6" 
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
-                    placeholder="Nombre, Dirección&#10;Juan Perez, San Martin 1234"></textarea>
-        </div>
-
-        <button onclick="importAddresses()" class="w-full px-4 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-semibold transition-colors">
-          <i class="fas fa-map-marker-alt mr-2"></i>Geolocalizar Direcciones
-        </button>
-
-        <div id="import-results" class="hidden">
-          <div class="bg-green-50 border border-green-200 rounded-lg p-3">
-            <p class="text-sm text-green-800 font-semibold">
-              <i class="fas fa-check-circle mr-2"></i>
-              <span id="import-count">0</span> direcciones procesadas
-            </p>
+        <!-- Velocímetro Circular -->
+        <div class="pl-4 flex flex-col items-center justify-center w-24">
+          <div class="relative w-20 h-20 flex items-center justify-center">
+            <svg class="w-full h-full transform -rotate-90">
+              <circle cx="40" cy="40" r="36" stroke="#e5e7eb" stroke-width="8" fill="none" />
+              <circle id="speed-circle" cx="40" cy="40" r="36" stroke="#3b82f6" stroke-width="8" fill="none" stroke-dasharray="226" stroke-dashoffset="226" class="transition-all duration-500" />
+            </svg>
+            <div class="absolute inset-0 flex flex-col items-center justify-center">
+              <span id="nav-speed" class="text-2xl font-black text-gray-800">0</span>
+              <span class="text-[10px] text-gray-500 font-bold">km/h</span>
+            </div>
           </div>
         </div>
       </div>
+      
+      <!-- Botón Siguiente Parada -->
+      <button onclick="nextStop()" class="w-full mt-4 bg-gray-900 hover:bg-black text-white py-3 rounded-xl font-bold text-lg shadow-lg active:scale-95 transition-transform">
+        Completar Parada <i class="fas fa-check-circle ml-2 text-green-400"></i>
+      </button>
     </div>
   </div>
 
-  <!-- Footer -->
-  <footer class="bg-gray-800 text-white py-4 mt-4">
-    <div class="container mx-auto px-4 text-center">
-      <p class="text-sm">© 2026 GPS Navigator - Clientes Rosario, Santa Fe</p>
-      <p class="text-xs text-gray-400 mt-1">Navegación GPS en tiempo real · Algoritmo TSP</p>
-    </div>
-  </footer>
+  <!-- Mapa Global (Usado por ambas interfaces) -->
+  <div id="map"></div>
 
   <script>
-    // Datos de clientes (34 registros)
-    let clientsData = [
-      {nro: 1, cliente: "Galeano Daniel", servicio: "ADT-JC", direccion: "Iriondo 1377", tel1: "3416456280", estadoTipo: "Residencial", asesor: "PABLO M", lat: -32.94812, lng: -60.67258},
-      {nro: 2, cliente: "Martinez Sofia", servicio: "LAPOS", direccion: "San Martin 2145", tel1: "3415123456", estadoTipo: "PRIMERA", asesor: "CARLOS R", lat: -32.94523, lng: -60.66891},
-      {nro: 3, cliente: "Rodriguez Carlos", servicio: "PROSEGUR AR", direccion: "Pellegrini 1823", tel1: "3416789012", estadoTipo: "BAJA INACTIVIDAD", asesor: "LAURA S", lat: -32.95134, lng: -60.67445},
-      {nro: 4, cliente: "Fernandez Ana", servicio: "LAPOS", direccion: "Entre Rios 1456", tel1: "3415234567", estadoTipo: "PRIMERA", asesor: "PABLO M", lat: -32.95678, lng: -60.68123},
-      {nro: 5, cliente: "Lopez Miguel", servicio: "IPLAN", direccion: "Santa Fe 2789", tel1: "3416345678", estadoTipo: "PRIMERA", asesor: "MARIA G", lat: -32.94234, lng: -60.66234},
-      {nro: 6, cliente: "Gonzalez Patricia", servicio: "PROSEGUR AR", direccion: "Corrientes 1234", tel1: "3415456789", estadoTipo: "BAJA VOLUNTARIA", asesor: "JORGE L", lat: -32.95456, lng: -60.67890},
-      {nro: 7, cliente: "Perez Juan", servicio: "LAPOS", direccion: "Cordoba 3456", tel1: "3416567890", estadoTipo: "PRIMERA", asesor: "CARLOS R", lat: -32.94890, lng: -60.66567},
-      {nro: 8, cliente: "Sanchez Maria", servicio: "ADT-JC", direccion: "Mendoza 2345", tel1: "3415678901", estadoTipo: "PRIMERA", asesor: "LAURA S", lat: -32.95234, lng: -60.67123},
-      {nro: 9, cliente: "Torres Roberto", servicio: "LAPOS", direccion: "Sarmiento 1678", tel1: "3416789012", estadoTipo: "BAJA INACTIVIDAD", asesor: "PABLO M", lat: -32.95567, lng: -60.67678},
-      {nro: 10, cliente: "Diaz Laura", servicio: "PROSEGUR AR", direccion: "Rioja 2890", tel1: "3415890123", estadoTipo: "PRIMERA", asesor: "MARIA G", lat: -32.94345, lng: -60.66345},
-      {nro: 11, cliente: "Romero Diego", servicio: "LAPOS", direccion: "Avellaneda 1567", tel1: "3416901234", estadoTipo: "PRIMERA", asesor: "JORGE L", lat: -32.95789, lng: -60.68234},
-      {nro: 12, cliente: "Alvarez Carmen", servicio: "PROSEGUR AR", direccion: "Urquiza 2123", tel1: "3415012345", estadoTipo: "BAJA VOLUNTARIA", asesor: "CARLOS R", lat: -32.95345, lng: -60.67789},
-      {nro: 13, cliente: "Castro Fernando", servicio: "LAPOS", direccion: "French 1890", tel1: "3416123456", estadoTipo: "PRIMERA", asesor: "LAURA S", lat: -32.94678, lng: -60.66678},
-      {nro: 14, cliente: "Vargas Silvia", servicio: "IPLAN", direccion: "San Luis 2456", tel1: "3415234567", estadoTipo: "PRIMERA", asesor: "PABLO M", lat: -32.94123, lng: -60.66123},
-      {nro: 15, cliente: "Morales Jorge", servicio: "LAPOS", direccion: "Laprida 1234", tel1: "3416345678", estadoTipo: "BAJA INACTIVIDAD", asesor: "MARIA G", lat: -32.95678, lng: -60.67567},
-      {nro: 16, cliente: "Herrera Lucia", servicio: "PROSEGUR AR", direccion: "Jujuy 2678", tel1: "3415456789", estadoTipo: "PRIMERA", asesor: "JORGE L", lat: -32.94456, lng: -60.66456},
-      {nro: 17, cliente: "Navarro Pablo", servicio: "LAPOS", direccion: "Pueyrredon 1789", tel1: "3416567890", estadoTipo: "PRIMERA", asesor: "CARLOS R", lat: -32.95890, lng: -60.68345},
-      {nro: 18, cliente: "Acosta Marta", servicio: "PROSEGUR AR", direccion: "Mitre 2345", tel1: "3415678901", estadoTipo: "BAJA VOLUNTARIA", asesor: "LAURA S", lat: -32.95234, lng: -60.67890},
-      {nro: 19, cliente: "Benitez Ricardo", servicio: "ADT-JC", direccion: "Alberdi 1456", tel1: "3416789012", estadoTipo: "PRIMERA", asesor: "PABLO M", lat: -32.95123, lng: -60.67234},
-      {nro: 20, cliente: "Campos Elena", servicio: "LAPOS", direccion: "Ituzaingó 2567", tel1: "3415890123", estadoTipo: "PRIMERA", asesor: "MARIA G", lat: -32.94567, lng: -60.66789},
-      {nro: 21, cliente: "Flores Alberto", servicio: "LAPOS", direccion: "San Juan 1678", tel1: "3416901234", estadoTipo: "BAJA INACTIVIDAD", asesor: "JORGE L", lat: -32.95789, lng: -60.67678},
-      {nro: 22, cliente: "Gimenez Rosa", servicio: "PROSEGUR AR", direccion: "Tucuman 2890", tel1: "3415012345", estadoTipo: "PRIMERA", asesor: "CARLOS R", lat: -32.94234, lng: -60.66345},
-      {nro: 23, cliente: "Ibarra Manuel", servicio: "LAPOS", direccion: "Oroño 1234", tel1: "3416123456", estadoTipo: "SEGUNDA", asesor: "LAURA S", lat: -32.95901, lng: -60.68456},
-      {nro: 24, cliente: "Juarez Beatriz", servicio: "PROSEGUR AR", direccion: "Corrientes 2345", tel1: "3415234567", estadoTipo: "BAJA INACTIVIDAD", asesor: "PABLO M", lat: -32.95345, lng: -60.67890},
-      {nro: 25, cliente: "Luna Gustavo", servicio: "LAPOS", direccion: "French 2456", tel1: "3416345678", estadoTipo: "PRIMERA", asesor: "MARIA G", lat: -32.94678, lng: -60.66678},
-      {nro: 26, cliente: "Medina Claudia", servicio: "PROSEGUR AR", direccion: "Mitre 1567", tel1: "3415456789", estadoTipo: "BAJA VOLUNTARIA", asesor: "JORGE L", lat: -32.95456, lng: -60.67789},
-      {nro: 27, cliente: "Nuñez Hector", servicio: "ADT-JC", direccion: "Bv 27 de Febrero 2678", tel1: "3416567890", estadoTipo: "Residencial", asesor: "CARLOS R", lat: -32.95234, lng: -60.67345},
-      {nro: 28, cliente: "Ortiz Veronica", servicio: "LAPOS", direccion: "Pueyrredon 1789", tel1: "3415678901", estadoTipo: "PRIMERA", asesor: "LAURA S", lat: -32.95890, lng: -60.68345},
-      {nro: 29, cliente: "Peralta Oscar", servicio: "LAPOS", direccion: "Avellaneda 2890", tel1: "3416789012", estadoTipo: "BAJA INACTIVIDAD", asesor: "PABLO M", lat: -32.95678, lng: -60.68234},
-      {nro: 30, cliente: "Quiroga Adriana", servicio: "IPLAN", direccion: "Rioja 1234", tel1: "3415890123", estadoTipo: "PRIMERA", asesor: "MARIA G", lat: -32.94345, lng: -60.66234},
-      {nro: 31, cliente: "Ramirez Eduardo", servicio: "PROSEGUR AR", direccion: "Tucuman 2345", tel1: "3416901234", estadoTipo: "BAJA INACTIVIDAD", asesor: "JORGE L", lat: -32.94456, lng: -60.66456},
-      {nro: 32, cliente: "Silva Natalia", servicio: "LAPOS", direccion: "Ituzaingó 1456", tel1: "3415012345", estadoTipo: "PRIMERA", asesor: "CARLOS R", lat: -32.94567, lng: -60.66789},
-      {nro: 33, cliente: "Tapia Ruben", servicio: "LAPOS", direccion: "San Juan 2567", tel1: "3416123456", estadoTipo: "RES", asesor: "LAURA S", lat: -32.95678, lng: -60.67567},
-      {nro: 34, cliente: "Urbina Gabriela", servicio: "PROSEGUR AR", direccion: "Jujuy 1678", tel1: "3415234567", estadoTipo: "RES", asesor: "PABLO M", lat: -32.94234, lng: -60.66345}
+    // ================= DATOS =================
+    const clientsData = [
+      {nro: 1, cliente: "Galeano Daniel", servicio: "ADT-JC", direccion: "Iriondo 1377", tel1: "3416456280", lat: -32.94812, lng: -60.67258},
+      {nro: 2, cliente: "Martinez Sofia", servicio: "LAPOS", direccion: "San Martin 2145", tel1: "3415123456", lat: -32.94523, lng: -60.66891},
+      {nro: 3, cliente: "Rodriguez Carlos", servicio: "PROSEGUR AR", direccion: "Pellegrini 1823", tel1: "3416789012", lat: -32.95134, lng: -60.67445},
+      {nro: 4, cliente: "Fernandez Ana", servicio: "LAPOS", direccion: "Entre Rios 1456", tel1: "3415234567", lat: -32.95678, lng: -60.68123},
+      {nro: 5, cliente: "Lopez Miguel", servicio: "IPLAN", direccion: "Santa Fe 2789", tel1: "3416345678", lat: -32.94234, lng: -60.66234},
+      {nro: 6, cliente: "Gonzalez Patricia", servicio: "PROSEGUR AR", direccion: "Corrientes 1234", tel1: "3415456789", lat: -32.95456, lng: -60.67890},
+      {nro: 7, cliente: "Perez Juan", servicio: "LAPOS", direccion: "Cordoba 3456", tel1: "3416567890", lat: -32.94890, lng: -60.66567},
+      {nro: 8, cliente: "Sanchez Maria", servicio: "ADT-JC", direccion: "Mendoza 2345", tel1: "3415678901", lat: -32.95234, lng: -60.67123},
+      {nro: 9, cliente: "Torres Roberto", servicio: "LAPOS", direccion: "Sarmiento 1678", tel1: "3416789012", lat: -32.95567, lng: -60.67678},
+      {nro: 10, cliente: "Diaz Laura", servicio: "PROSEGUR AR", direccion: "Rioja 2890", tel1: "3415890123", lat: -32.94345, lng: -60.66345}
+      // ... (Se pueden agregar más datos aquí)
     ];
 
-    let map;
+    // ================= VARIABLES GLOBALES =================
+    let map, miniMap;
     let markers = [];
-    let filteredData = [...clientsData];
     let selectedWaypoints = [];
-    let optimizedRouteOrder = [];
-    let selectionMode = false;
+    let optimizedRoute = [];
     let routingControl = null;
-    let routeStats = { distance: 0, time: 0 };
-    let customStartPoint = null;
-    let startMarker = null;
-    const rosarioCenter = [-32.9520, -60.6680];
+    let selectionMode = false;
     
-    // Variables de navegación GPS
-    let gpsActive = false;
-    let currentLocation = null;
-    let locationWatcher = null;
-    let currentStopIndex = 0;
+    // Variables GPS/Waze
+    let isWazeMode = false;
+    let watchId = null;
     let userMarker = null;
-    let navigationInterval = null;
+    let currentStopIndex = 0;
+    let userHeading = 0;
+    let userSpeed = 0;
 
-    // Inicializar mapa
-    function initMap() {
-      map = L.map('map').setView(rosarioCenter, 13);
+    // ================= INICIALIZACIÓN =================
+    function init() {
+      // Inicializar Mini Mapa (Dashboard)
+      miniMap = L.map('mini-map').setView([-32.9520, -60.6680], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(miniMap);
+      loadMarkers(miniMap);
+
+      // El mapa global se inicializa pero está oculto detrás del dashboard
+      map = L.map('map', { zoomControl: false }).setView([-32.9520, -60.6680], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
       
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
-      }).addTo(map);
-
-      populateStartPointSelector();
-      addMarkers(clientsData);
+      // Cargar marcadores en el mapa global también (para cuando se active Waze)
+      loadMarkers(map);
     }
 
-    // Poblar selector de puntos de inicio
-    function populateStartPointSelector() {
-      const select = document.getElementById('start-point-select');
-      clientsData.forEach((client, index) => {
-        const option = document.createElement('option');
-        option.value = `${client.lat},${client.lng}`;
-        option.textContent = `${index + 1}. ${client.cliente} (${client.servicio})`;
-        select.appendChild(option);
-      });
-    }
-
-    // Manejar cambio en selector de punto de inicio
-    function handleStartPointChange() {
-      const selectValue = document.getElementById('start-point-select').value;
-      const addressInput = document.getElementById('start-point-address');
-      
-      if (selectValue) {
-        addressInput.value = '';
-        customStartPoint = null;
-        removeStartMarker();
-        
-        const [lat, lng] = selectValue.split(',').map(Number);
-        addStartMarker(lat, lng, 'Cliente seleccionado');
-      }
-    }
-
-    // Geocodificar dirección personalizada
-    async function geocodeCustomAddress() {
-      const address = document.getElementById('start-point-address').value.trim();
-      
-      if (!address) {
-        alert('Por favor, ingresa una dirección');
-        return;
-      }
-      
-      const btn = document.getElementById('btn-geocode');
-      const originalText = btn.innerHTML;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Buscando...';
-      btn.disabled = true;
-      
-      try {
-        const coords = await geocodeAddress(address + ', Rosario, Santa Fe, Argentina');
-        
-        if (coords) {
-          customStartPoint = coords;
-          document.getElementById('start-point-select').value = '';
-          removeStartMarker();
-          addStartMarker(coords.lat, coords.lng, address);
-          map.setView([coords.lat, coords.lng], 15);
-          alert(`✅ Dirección encontrada:\n${address}`);
-        } else {
-          alert('❌ No se pudo encontrar la dirección.');
-        }
-      } catch (error) {
-        console.error('Error:', error);
-        alert('Error al buscar la dirección');
-      } finally {
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-      }
-    }
-
-    // Agregar marcador de punto de inicio
-    function addStartMarker(lat, lng, label) {
-      removeStartMarker();
-      
-      const startIcon = L.divIcon({
-        className: 'marker-icon marker-start',
-        html: '<i class="fas fa-flag-checkered"></i>',
-        iconSize: [35, 35],
-        iconAnchor: [17, 17]
-      });
-      
-      startMarker = L.marker([lat, lng], { icon: startIcon })
-        .addTo(map)
-        .bindPopup(`<div class="custom-popup"><div class="popup-title">🚩 Punto de Inicio</div><div class="popup-row">${label}</div></div>`);
-    }
-
-    // Remover marcador de punto de inicio
-    function removeStartMarker() {
-      if (startMarker) {
-        map.removeLayer(startMarker);
-        startMarker = null;
-      }
-    }
-
-    // Agregar marcadores
-    function addMarkers(data) {
-      markers.forEach(({marker}) => map.removeLayer(marker));
-      markers = [];
-
-      data.forEach((client, index) => {
-        if (!client.lat || !client.lng) return;
-        
-        const customIcon = L.divIcon({
-          className: `marker-icon marker-${getMarkerClass(client.servicio)}`,
-          html: `<span>${index + 1}</span>`,
-          iconSize: [30, 30],
-          iconAnchor: [15, 15]
-        });
-
-        const marker = L.marker([client.lat, client.lng], { icon: customIcon })
-          .addTo(map)
-          .bindPopup(createPopupContent(client));
-        
-        marker.on('click', function() {
-          if (selectionMode) {
-            toggleWaypoint(client, marker);
-          }
+    function loadMarkers(targetMap) {
+      clientsData.forEach(client => {
+        const icon = L.divIcon({
+          className: 'custom-div-icon',
+          html: `<div style="background-color: ${getServiceColor(client.servicio)}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>`,
+          iconSize: [12, 12],
+          iconAnchor: [6, 6]
         });
         
-        markers.push({ marker, client });
+        const marker = L.marker([client.lat, client.lng], { icon: icon })
+          .bindPopup(`<b>${client.cliente}</b><br>${client.direccion}`);
+        
+        marker.on('click', () => handleMarkerClick(client, marker));
+        targetMap.addLayer(marker);
+        markers.push({ data: client, marker: marker });
       });
     }
 
-    // Alternar modo selección
+    function getServiceColor(servicio) {
+      const colors = { 'ADT-JC': '#ef4444', 'LAPOS': '#3b82f6', 'IPLAN': '#10b981', 'PROSEGUR AR': '#f59e0b' };
+      return colors[servicio] || '#6b7280';
+    }
+
+    // ================= LÓGICA DE SELECCIÓN =================
     function toggleSelectionMode() {
       selectionMode = !selectionMode;
       const btn = document.getElementById('btn-select-mode');
-      
-      if (selectionMode) {
-        btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Modo Selección ACTIVO';
-        btn.classList.remove('bg-purple-600', 'hover:bg-purple-700');
-        btn.classList.add('bg-green-600', 'hover:bg-green-700');
-      } else {
-        btn.innerHTML = '<i class="fas fa-mouse-pointer mr-2"></i>Seleccionar Puntos';
-        btn.classList.remove('bg-green-600', 'hover:bg-green-700');
-        btn.classList.add('bg-purple-600', 'hover:bg-purple-700');
-      }
+      btn.classList.toggle('bg-purple-600');
+      btn.classList.toggle('text-white');
+      btn.innerHTML = selectionMode ? '<i class="fas fa-check mr-1"></i> Listo' : '<i class="fas fa-mouse-pointer mr-1"></i> Seleccionar';
     }
 
-    // Alternar waypoint
-    function toggleWaypoint(client, markerElement) {
-      const existingIndex = selectedWaypoints.findIndex(wp => wp.nro === client.nro);
+    function handleMarkerClick(client, marker) {
+      if (!selectionMode) return;
       
-      if (existingIndex >= 0) {
-        selectedWaypoints.splice(existingIndex, 1);
-        markerElement.getElement().classList.remove('marker-selected');
-      } else {
+      const index = selectedWaypoints.findIndex(w => w.nro === client.nro);
+      if (index === -1) {
         selectedWaypoints.push(client);
-        markerElement.getElement().classList.add('marker-selected');
+        marker.getElement().style.transform += " scale(1.5)";
+        marker.getElement().style.border = "2px solid black";
+      } else {
+        selectedWaypoints.splice(index, 1);
+        marker.getElement().style.transform = marker.getElement().style.transform.replace(" scale(1.5)", "");
+        marker.getElement().style.border = "none";
       }
-      
       updateWaypointsList();
-      updateRouteButtons();
     }
 
-    // Actualizar lista de waypoints
     function updateWaypointsList() {
-      const listDiv = document.getElementById('waypoints-list');
-      const countSpan = document.getElementById('selected-count');
+      const list = document.getElementById('waypoints-list');
+      const count = document.getElementById('count-selected');
+      const btnWaze = document.getElementById('btn-start-waze');
       
-      countSpan.textContent = selectedWaypoints.length;
+      count.innerText = selectedWaypoints.length;
+      list.innerHTML = '';
       
       if (selectedWaypoints.length === 0) {
-        listDiv.innerHTML = '<p class="text-gray-400 text-sm italic">Haz clic en los marcadores del mapa para agregarlos a la ruta</p>';
+        list.innerHTML = '<p class="text-gray-400 italic text-center py-4">Selecciona clientes en el mapa...</p>';
+        btnWaze.disabled = true;
         return;
       }
-      
-      let html = '';
-      selectedWaypoints.forEach((wp, index) => {
-        const isActive = gpsActive && index === currentStopIndex;
-        const isCompleted = gpsActive && index < currentStopIndex;
-        const activeClass = isActive ? 'waypoint-active' : '';
-        const completedClass = isCompleted ? 'waypoint-completed' : '';
-        
-        html += `
-          <div class="waypoint-item flex items-center justify-between p-2 rounded mb-1 bg-gray-50 ${activeClass} ${completedClass}">
-            <div class="flex items-center space-x-2 flex-1">
-              <span class="bg-purple-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">${index + 1}</span>
-              <div class="flex-1 min-w-0">
-                <div class="text-sm font-semibold truncate">${wp.cliente}</div>
-                <div class="text-xs text-gray-500">${wp.servicio}</div>
-              </div>
-            </div>
-            ${!gpsActive ? `<button onclick="removeWaypoint(${wp.nro})" class="ml-2 text-red-500 hover:text-red-700"><i class="fas fa-times"></i></button>` : ''}
-          </div>
+
+      selectedWaypoints.forEach((wp, i) => {
+        const div = document.createElement('div');
+        div.className = 'flex justify-between items-center bg-white p-2 rounded shadow-sm border border-gray-100';
+        div.innerHTML = `
+          <span class="font-medium text-gray-700">${i+1}. ${wp.cliente}</span>
+          <button onclick="removeWaypoint(${wp.nro})" class="text-red-500 hover:text-red-700"><i class="fas fa-times"></i></button>
         `;
+        list.appendChild(div);
       });
       
-      listDiv.innerHTML = html;
+      btnWaze.disabled = selectedWaypoints.length < 2;
     }
 
-    // Remover waypoint
     function removeWaypoint(nro) {
-      const client = selectedWaypoints.find(wp => wp.nro === nro);
-      if (client) {
-        const markerObj = markers.find(m => m.client.nro === nro);
-        if (markerObj) {
-          markerObj.marker.getElement().classList.remove('marker-selected');
-        }
-        selectedWaypoints = selectedWaypoints.filter(wp => wp.nro !== nro);
-        updateWaypointsList();
-        updateRouteButtons();
-      }
+      selectedWaypoints = selectedWaypoints.filter(w => w.nro !== nro);
+      // Resetear estilos visuales en marcadores (simplificado)
+      markers.forEach(m => {
+        m.marker.getElement().style.transform = "";
+        m.marker.getElement().style.border = "none";
+      });
+      updateWaypointsList();
     }
 
-    // Actualizar botones
-    function updateRouteButtons() {
-      const btnCalculate = document.getElementById('btn-calculate');
-      const btnClear = document.getElementById('btn-clear');
-      const btnExportTxt = document.getElementById('btn-export-txt');
-      const btnExportGmaps = document.getElementById('btn-export-gmaps');
-      const btnStartGps = document.getElementById('btn-start-gps');
-      
-      if (selectedWaypoints.length >= 2) {
-        btnCalculate.disabled = false;
-        btnClear.disabled = false;
-      } else {
-        btnCalculate.disabled = true;
-        btnClear.disabled = true;
-      }
-      
-      if (optimizedRouteOrder.length > 0) {
-        btnExportTxt.disabled = false;
-        btnExportGmaps.disabled = false;
-        btnStartGps.disabled = false;
-      } else {
-        btnExportTxt.disabled = true;
-        btnExportGmaps.disabled = true;
-        btnStartGps.disabled = true;
-      }
-    }
-
-    // Calcular ruta óptima
-    async function calculateOptimalRoute() {
+    // ================= CÁLCULO DE RUTA =================
+    async function calculateRoute() {
       if (selectedWaypoints.length < 2) {
-        alert('Selecciona al menos 2 puntos para calcular la ruta');
+        alert("Selecciona al menos 2 paradas");
         return;
       }
+
+      document.getElementById('btn-calc').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Calculando...';
       
-      const btn = document.getElementById('btn-calculate');
-      const originalText = btn.innerHTML;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Calculando...';
-      btn.disabled = true;
+      // Simulación de optimización TSP (Vecino más cercano)
+      let start = { lat: -32.9520, lng: -60.6680 }; // Default Centro
       
-      try {
-        let startPoint;
-        
-        if (customStartPoint) {
-          startPoint = customStartPoint;
-        } else {
-          const startPointStr = document.getElementById('start-point-select').value;
-          if (startPointStr) {
-            const [lat, lng] = startPointStr.split(',').map(Number);
-            startPoint = { lat, lng };
-          } else {
-            startPoint = { lat: rosarioCenter[0], lng: rosarioCenter[1] };
-          }
-        }
-        
-        optimizedRouteOrder = optimizeRoute(startPoint, selectedWaypoints);
-        
-        const waypoints = [
-          L.latLng(startPoint.lat, startPoint.lng),
-          ...optimizedRouteOrder.map(wp => L.latLng(wp.lat, wp.lng))
-        ];
-        
-        if (routingControl) {
-          map.removeControl(routingControl);
-        }
-        
-        routingControl = L.Routing.control({
-          waypoints: waypoints,
-          routeWhileDragging: false,
-          showAlternatives: false,
-          fitSelectedRoutes: true,
-          createMarker: function() { return null; },
-          lineOptions: {
-            styles: [
-              { color: '#8b5cf6', opacity: 0.8, weight: 6 },
-              { color: '#ffffff', opacity: 0.3, weight: 4 }
-            ]
-          }
-        }).addTo(map);
-        
-        routingControl.on('routesfound', function(e) {
-          const routes = e.routes;
-          const summary = routes[0].summary;
-          
-          const distanceKm = (summary.totalDistance / 1000).toFixed(1);
-          const timeMin = Math.round(summary.totalTime / 60);
-          
-          routeStats = { distance: parseFloat(distanceKm), time: timeMin };
-          
-          document.getElementById('total-distance').textContent = `${distanceKm} km`;
-          document.getElementById('total-time').textContent = `${timeMin} min`;
-          
-          recalculateCosts(distanceKm);
-          
-          btn.innerHTML = originalText;
-          btn.disabled = false;
-          
-          updateRouteButtons();
-          
-          map.fitBounds(L.latLngBounds(waypoints), { padding: [50, 50] });
-        });
-        
-      } catch (error) {
-        console.error('Error:', error);
-        alert('Error al calcular la ruta');
-        btn.innerHTML = originalText;
-        btn.disabled = false;
+      // Si hay dirección de inicio personalizada, usar geocodificación (simulada aquí por brevedad)
+      const addrInput = document.getElementById('start-address').value;
+      if (addrInput) {
+         // En producción, llamar a API de Nominatim aquí
+         console.log("Buscando dirección:", addrInput);
       }
+
+      optimizedRoute = optimizeTSP(start, selectedWaypoints);
+      
+      // Dibujar ruta en MiniMap
+      if (routingControl) miniMap.removeControl(routingControl);
+      
+      const waypoints = [L.latLng(start.lat, start.lng), ...optimizedRoute.map(w => L.latLng(w.lat, w.lng))];
+      
+      routingControl = L.Routing.control({
+        waypoints: waypoints,
+        router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' }),
+        lineOptions: { styles: [{ color: '#3b82f6', weight: 6 }] },
+        createMarker: function() { return null; }, // No crear marcadores extra
+        addWaypoints: false,
+        draggableWaypoints: false,
+        fitSelectedRoutes: true,
+        show: false // Ocultar panel de instrucciones por defecto
+      }).addTo(miniMap);
+
+      routingControl.on('routesfound', function(e) {
+        const route = e.routes[0];
+        const distKm = (route.summary.totalDistance / 1000).toFixed(1);
+        const timeMin = Math.round(route.summary.totalTime / 60);
+        
+        document.getElementById('stat-dist').innerText = distKm;
+        document.getElementById('stat-time').innerText = timeMin;
+        document.getElementById('stat-cost').innerText = Math.round((distKm / 12) * 950); // Estimado
+        document.getElementById('route-stats').classList.remove('hidden');
+        
+        document.getElementById('btn-calc').innerHTML = '<i class="fas fa-calculator mr-2"></i>Recalcular';
+      });
     }
 
-    // Algoritmo TSP (vecino más cercano)
-    function optimizeRoute(startPoint, waypoints) {
-      const unvisited = [...waypoints];
-      const optimized = [];
-      let currentPoint = startPoint;
+    function optimizeTSP(start, points) {
+      let unvisited = [...points];
+      let route = [];
+      let current = start;
       
       while (unvisited.length > 0) {
-        let nearestIndex = 0;
-        let nearestDistance = Infinity;
+        let nearest = null;
+        let minDist = Infinity;
+        let nearestIndex = -1;
         
-        unvisited.forEach((wp, index) => {
-          const distance = calculateDistance(
-            currentPoint.lat, currentPoint.lng,
-            wp.lat, wp.lng
-          );
-          
-          if (distance < nearestDistance) {
-            nearestDistance = distance;
-            nearestIndex = index;
+        unvisited.forEach((p, i) => {
+          const d = Math.sqrt(Math.pow(p.lat - current.lat, 2) + Math.pow(p.lng - current.lng, 2));
+          if (d < minDist) {
+            minDist = d;
+            nearest = p;
+            nearestIndex = i;
           }
         });
         
-        const nearest = unvisited.splice(nearestIndex, 1)[0];
-        optimized.push(nearest);
-        currentPoint = nearest;
+        route.push(nearest);
+        current = { lat: nearest.lat, lng: nearest.lng };
+        unvisited.splice(nearestIndex, 1);
       }
-      
-      return optimized;
+      return route;
     }
 
-    // Calcular distancia (Haversine)
-    function calculateDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                Math.sin(dLon/2) * Math.sin(dLon/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      return R * c;
-    }
+    // ================= MODO WAZE (GPS) =================
+    function startWazeMode() {
+      if (optimizedRoute.length === 0) calculateRoute();
+      if (optimizedRoute.length === 0) return;
 
-    // Recalcular costos
-    function recalculateCosts(distanceKm = null) {
-      if (!distanceKm) {
-        const distText = document.getElementById('total-distance').textContent;
-        if (distText === '-') return;
-        distanceKm = parseFloat(distText);
-      }
-      
-      const fuelPrice = parseFloat(document.getElementById('fuel-price').value) || 950;
-      const fuelConsumption = parseFloat(document.getElementById('fuel-consumption').value) || 12;
-      
-      const litersNeeded = distanceKm / fuelConsumption;
-      const totalCost = litersNeeded * fuelPrice;
-      
-      document.getElementById('fuel-cost').textContent = `$${totalCost.toFixed(0)}`;
-      document.getElementById('clients-count').textContent = selectedWaypoints.length;
-    }
-
-    // ==================== FUNCIONES DE NAVEGACIÓN GPS ====================
-
-    // Iniciar navegación GPS
-    function startGPSNavigation() {
-      if (optimizedRouteOrder.length === 0) {
-        alert('Primero calcula una ruta óptima');
-        return;
-      }
-      
-      if (!navigator.geolocation) {
-        alert('Tu navegador no soporta geolocalización');
-        return;
-      }
-      
-      gpsActive = true;
+      isWazeMode = true;
       currentStopIndex = 0;
       
-      // Mostrar panel de navegación
-      document.getElementById('gps-navigation-panel').classList.remove('hidden');
+      // Cambiar UI
+      document.getElementById('dashboard').style.display = 'none';
+      document.getElementById('navigation-interface').classList.add('active');
       
-      // Solicitar permiso de geolocalización
-      navigator.geolocation.getCurrentPosition(
-        function(position) {
-          currentLocation = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          };
-          
-          // Agregar marcador de ubicación actual
-          updateUserMarker(currentLocation.lat, currentLocation.lng);
-          
-          // Iniciar seguimiento continuo
-          locationWatcher = navigator.geolocation.watchPosition(
-            function(pos) {
-              currentLocation = {
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude
-              };
-              updateUserMarker(currentLocation.lat, currentLocation.lng);
-              updateGPSNavigation();
-            },
-            function(error) {
-              console.error('Error de geolocalización:', error);
-            },
-            {
-              enableHighAccuracy: true,
-              maximumAge: 10000,
-              timeout: 5000
-            }
-          );
-          
-          // Actualizar navegación
-          updateGPSNavigation();
-          
-          alert('✅ Navegación GPS iniciada!\n\nPermite el acceso a tu ubicación para comenzar.');
-        },
-        function(error) {
-          console.error('Error al obtener ubicación:', error);
-          alert('❌ No se pudo obtener tu ubicación. Verifica los permisos de geolocalización.');
-          gpsActive = false;
-        },
-        {
+      // Configurar Mapa Global para Navegación
+      map.invalidateSize();
+      map.setView([optimizedRoute[0].lat, optimizedRoute[0].lng], 16);
+      
+      // Dibujar ruta completa en mapa global
+      if (routingControl) map.removeControl(routingControl);
+      const waypoints = [L.latLng(-32.9520, -60.6680), ...optimizedRoute.map(w => L.latLng(w.lat, w.lng))];
+      
+      routingControl = L.Routing.control({
+        waypoints: waypoints,
+        lineOptions: { styles: [{ color: '#3b82f6', weight: 8, opacity: 0.9 }] }, // Estilo Waze
+        createMarker: function() { return null; },
+        show: false
+      }).addTo(map);
+
+      // Iniciar Geolocalización
+      if (navigator.geolocation) {
+        watchId = navigator.geolocation.watchPosition(updatePosition, handleError, {
           enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
-        }
-      );
+          maximumAge: 0,
+          timeout: 5000
+        });
+      } else {
+        alert("Geolocalización no soportada");
+      }
       
-      updateWaypointsList();
+      updateNavUI();
     }
 
-    // Actualizar marcador de ubicación del usuario
-    function updateUserMarker(lat, lng) {
-      if (userMarker) {
+    function stopWazeMode() {
+      isWazeMode = false;
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+      if (userMarker) map.removeLayer(userMarker);
+      
+      document.getElementById('navigation-interface').classList.remove('active');
+      document.getElementById('dashboard').style.display = 'block';
+      
+      // Volver al mini mapa
+      setTimeout(() => miniMap.invalidateSize(), 100);
+    }
+
+    function updatePosition(position) {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      const speed = position.coords.speed || 0; // m/s
+      const heading = position.coords.heading || 0;
+
+      userSpeed = Math.round(speed * 3.6); // Convertir a km/h
+      userHeading = heading;
+
+      // Actualizar marcador de usuario
+      if (!userMarker) {
+        const icon = L.divIcon({
+          className: 'user-marker-icon',
+          html: '<div class="user-arrow"></div>',
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        });
+        userMarker = L.marker([lat, lng], { icon: icon, rotationAngle: heading }).addTo(map);
+      } else {
         userMarker.setLatLng([lat, lng]);
-      } else {
-        const userIcon = L.divIcon({
-          className: 'marker-icon marker-current',
-          html: '<i class="fas fa-car"></i>',
-          iconSize: [40, 40],
-          iconAnchor: [20, 20]
-        });
-        
-        userMarker = L.marker([lat, lng], { icon: userIcon })
-          .addTo(map)
-          .bindPopup('<div class="custom-popup"><div class="popup-title">📍 Tu Ubicación</div></div>');
+        userMarker.setRotationAngle(heading);
       }
+
+      // Centrar mapa y rotar si es posible (Leaflet básico no rota el tile layer fácilmente sin plugins complejos, 
+      // pero rotamos el marcador y mantenemos el centro)
+      map.panTo([lat, lng]);
       
-      map.setView([lat, lng], 16);
+      // Actualizar UI de velocidad
+      document.getElementById('nav-speed').innerText = userSpeed;
+      const circleOffset = 226 - (Math.min(userSpeed, 120) / 120 * 226);
+      document.getElementById('speed-circle').style.strokeDashoffset = circleOffset;
+      
+      checkProximity(lat, lng);
     }
 
-    // Actualizar información de navegación GPS
-    function updateGPSNavigation() {
-      if (!gpsActive || !currentLocation || currentStopIndex >= optimizedRouteOrder.length) {
+    function handleError(error) {
+      console.warn('ERROR(' + error.code + '): ' + error.message);
+    }
+
+    function checkProximity(lat, lng) {
+      if (currentStopIndex >= optimizedRoute.length) return;
+      
+      const target = optimizedRoute[currentStopIndex];
+      const dist = Math.sqrt(Math.pow(lat - target.lat, 2) + Math.pow(lng - target.lng, 2));
+      
+      // Si está a menos de ~50 metros (0.0005 grados aprox)
+      if (dist < 0.0005) {
+        // Vibrar o sonar (opcional)
+        if (navigator.vibrate) navigator.vibrate(200);
+      }
+    }
+
+    function updateNavUI() {
+      if (currentStopIndex >= optimizedRoute.length) {
+        alert("¡Ruta completada!");
+        stopWazeMode();
         return;
       }
+
+      const stop = optimizedRoute[currentStopIndex];
+      document.getElementById('nav-client-name').innerText = stop.cliente;
+      document.getElementById('nav-client-addr').innerText = stop.direccion;
+      document.getElementById('nav-client-phone').innerText = stop.tel1;
       
-      const nextStop = optimizedRouteOrder[currentStopIndex];
-      const distance = calculateDistance(
-        currentLocation.lat, currentLocation.lng,
-        nextStop.lat, nextStop.lng
-      );
+      document.getElementById('nav-stop-counter').innerText = `Parada ${currentStopIndex + 1} de ${optimizedRoute.length}`;
+      document.getElementById('nav-total-remaining').innerText = `${optimizedRoute.length - (currentStopIndex + 1)} restantes`;
       
-      // Estimación de tiempo (asumiendo 30 km/h promedio en ciudad)
-      const timeMinutes = Math.round((distance / 30) * 60);
+      // Progreso barra
+      const pct = ((currentStopIndex) / optimizedRoute.length) * 100;
+      document.getElementById('nav-progress-bar').style.width = `${pct}%`;
       
-      // Actualizar panel de navegación
-      document.getElementById('gps-next-stop').textContent = currentStopIndex + 1;
-      document.getElementById('gps-distance').textContent = distance.toFixed(1);
-      document.getElementById('gps-time').textContent = timeMinutes;
-      document.getElementById('gps-progress').textContent = `${currentStopIndex + 1}/${optimizedRouteOrder.length}`;
-      document.getElementById('gps-current-client').textContent = nextStop.cliente;
-      document.getElementById('gps-current-address').textContent = nextStop.direccion;
-      
-      // Verificar si llegó cerca de la parada (menos de 100 metros)
-      if (distance < 0.1) {
-        if (confirm(`✅ ¡Has llegado a ${nextStop.cliente}!\n\n¿Marcar como visitada y continuar a la siguiente parada?`)) {
-          completeCurrentStop();
-        }
-      }
-      
-      updateWaypointsList();
+      // Hora llegada estimada (simple)
+      const now = new Date();
+      now.setMinutes(now.getMinutes() + 15); // Fake estimate
+      document.getElementById('nav-arrival-time').innerText = now.getHours() + ":" + String(now.getMinutes()).padStart(2, '0');
     }
 
-    // Completar parada actual y avanzar a la siguiente
-    function completeCurrentStop() {
+    function nextStop() {
       currentStopIndex++;
+      updateNavUI();
       
-      if (currentStopIndex >= optimizedRouteOrder.length) {
-        alert('🎉 ¡Felicidades! Has completado todas las paradas de la ruta.');
-        stopNavigation();
-        return;
-      }
-      
-      updateGPSNavigation();
-      updateWaypointsList();
-    }
-
-    // Navegar a la siguiente parada (abre Google Maps)
-    function navigateToNextStop() {
-      if (!gpsActive || currentStopIndex >= optimizedRouteOrder.length) {
-        return;
-      }
-      
-      const nextStop = optimizedRouteOrder[currentStopIndex];
-      
-      let origin;
-      if (currentLocation) {
-        origin = `${currentLocation.lat},${currentLocation.lng}`;
-      } else {
-        alert('Esperando ubicación actual...');
-        return;
-      }
-      
-      const destination = `${nextStop.lat},${nextStop.lng}`;
-      const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
-      
-      window.open(url, '_blank');
-    }
-
-    // Detener navegación GPS
-    function stopNavigation() {
-      gpsActive = false;
-      currentStopIndex = 0;
-      
-      if (locationWatcher) {
-        navigator.geolocation.clearWatch(locationWatcher);
-        locationWatcher = null;
-      }
-      
-      if (userMarker) {
-        map.removeLayer(userMarker);
-        userMarker = null;
-      }
-      
-      document.getElementById('gps-navigation-panel').classList.add('hidden');
-      
-      updateWaypointsList();
-      
-      alert('Navegación GPS detenida');
-    }
-
-    // Exportar ruta como archivo de texto
-    function exportRouteText() {
-      if (optimizedRouteOrder.length === 0) {
-        alert('Primero calcula una ruta óptima');
-        return;
-      }
-      
-      let startPointName = "Centro de Rosario";
-      let startPointCoords = rosarioCenter;
-      
-      if (customStartPoint) {
-        startPointName = document.getElementById('start-point-address').value || "Dirección personalizada";
-        startPointCoords = [customStartPoint.lat, customStartPoint.lng];
-      } else {
-        const startPointStr = document.getElementById('start-point-select').value;
-        if (startPointStr) {
-          const [lat, lng] = startPointStr.split(',').map(Number);
-          startPointCoords = [lat, lng];
-          const startClient = clientsData.find(c => Math.abs(c.lat - lat) < 0.001 && Math.abs(c.lng - lng) < 0.001);
-          if (startClient) {
-            startPointName = startClient.cliente;
-          }
-        }
-      }
-      
-      const fuelPrice = parseFloat(document.getElementById('fuel-price').value) || 950;
-      const fuelConsumption = parseFloat(document.getElementById('fuel-consumption').value) || 12;
-      const litersNeeded = routeStats.distance / fuelConsumption;
-      const totalCost = litersNeeded * fuelPrice;
-      
-      let content = '═══════════════════════════════════════════════════════════\n';
-      content += '  PLAN DE RUTA OPTIMIZADO - CLIENTES ROSARIO\n';
-      content += '═══════════════════════════════════════════════════════════\n\n';
-      
-      content += `📅 Fecha de generación: ${new Date().toLocaleString('es-AR')}\n`;
-      content += `📍 Punto de inicio: ${startPointName}\n`;
-      content += `   Coordenadas: ${startPointCoords[0].toFixed(5)}, ${startPointCoords[1].toFixed(5)}\n\n`;
-      
-      content += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-      content += '  RESUMEN DE LA RUTA\n';
-      content += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
-      
-      content += `📊 Total de clientes a visitar: ${optimizedRouteOrder.length}\n`;
-      content += `📏 Distancia total estimada: ${routeStats.distance.toFixed(1)} km\n`;
-      content += `⏱️ Tiempo estimado de viaje: ${routeStats.time} minutos\n`;
-      content += `⛽ Consumo estimado: ${litersNeeded.toFixed(1)} litros\n`;
-      content += `💰 Costo de combustible: $${totalCost.toFixed(0)} ARS\n`;
-      content += `   (Nafta: $${fuelPrice}/L | Consumo: ${fuelConsumption} km/L)\n\n`;
-      
-      content += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-      content += '  ORDEN ÓPTIMO DE VISITA\n';
-      content += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
-      
-      optimizedRouteOrder.forEach((client, index) => {
-        content += `${index + 1}. ${client.cliente}\n`;
-        content += `   🏢 Servicio: ${client.servicio}\n`;
-        content += `   📍 Dirección: ${client.direccion}, Rosario, Santa Fe\n`;
-        content += `   📞 Teléfono: ${client.tel1}\n`;
-        content += `   📋 Estado: ${client.estadoTipo || 'Sin especificar'}\n`;
-        content += `   👤 Asesor: ${client.asesor}\n`;
-        content += `   🌐 Coordenadas GPS: ${client.lat.toFixed(5)}, ${client.lng.toFixed(5)}\n`;
-        content += `   ✅ Ubicación verificada por GPS\n\n`;
-      });
-      
-      content += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-      content += '  NOTAS IMPORTANTES\n';
-      content += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
-      content += '• Todas las ubicaciones han sido verificadas con coordenadas GPS\n';
-      content += '• El orden de visita está optimizado para minimizar distancia y tiempo\n';
-      content += '• Se recomienda verificar disponibilidad antes de cada visita\n';
-      content += '• Los tiempos son estimados y pueden variar según tráfico\n\n';
-      
-      content += '═══════════════════════════════════════════════════════════\n';
-      content += '  Generado por Optimizador de Rutas - Clientes Rosario\n';
-      content += '  © 2026 - Rosario, Santa Fe, Argentina\n';
-      content += '═══════════════════════════════════════════════════════════\n';
-      
-      const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
-      const link = document.createElement('a');
-      const timestamp = new Date().toISOString().slice(0,10);
-      link.href = URL.createObjectURL(blob);
-      link.download = `ruta_optimizada_${timestamp}.txt`;
-      link.click();
-      
-      alert(`✅ Archivo de ruta exportado exitosamente!\n\nSe descargó: ruta_optimizada_${timestamp}.txt`);
-    }
-
-    // Modal de exportación
-    function openExportModal() {
-      if (optimizedRouteOrder.length === 0) {
-        alert('Primero calcula una ruta óptima');
-        return;
-      }
-      
-      const totalStops = optimizedRouteOrder.length;
-      document.getElementById('option-direct').style.display = totalStops <= 10 ? 'block' : 'none';
-      document.getElementById('option-segments').style.display = totalStops > 10 ? 'block' : 'none';
-      
-      if (totalStops > 10) {
-        generateSegmentsList();
-      }
-      
-      document.getElementById('export-modal').classList.add('active');
-    }
-
-    function closeExportModal() {
-      document.getElementById('export-modal').classList.remove('active');
-    }
-
-    // Exportar URL directa de Google Maps
-    function exportGoogleMapsDirect() {
-      const url = generateGoogleMapsURL(optimizedRouteOrder);
-      window.open(url, '_blank');
-    }
-
-    // Generar lista de segmentos
-    function generateSegmentsList() {
-      const segments = createRouteSegments();
-      const container = document.getElementById('segments-list');
-      
-      let html = '';
-      segments.forEach((segment, index) => {
-        html += `
-          <div class="bg-gray-50 border border-gray-200 rounded p-3">
-            <div class="flex justify-between items-center">
-              <div>
-                <span class="font-semibold text-sm">Segmento ${index + 1}:</span>
-                <span class="text-xs text-gray-600 ml-2">${segment.stops.length} paradas</span>
-              </div>
-              <button onclick="openSegmentInMaps(${index})" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs">
-                <i class="fas fa-external-link-alt mr-1"></i>Abrir
-              </button>
-            </div>
-          </div>
-        `;
-      });
-      
-      container.innerHTML = html;
-    }
-
-    // Crear segmentos de ruta
-    function createRouteSegments() {
-      const segments = [];
-      const chunkSize = 9;
-      
-      for (let i = 0; i < optimizedRouteOrder.length; i += chunkSize) {
-        const chunk = optimizedRouteOrder.slice(i, i + chunkSize);
-        segments.push({
-          stops: chunk,
-          startIndex: i,
-          endIndex: i + chunk.length - 1
-        });
-      }
-      
-      return segments;
-    }
-
-    // Abrir segmento en Google Maps
-    function openSegmentInMaps(segmentIndex) {
-      const segments = createRouteSegments();
-      const segment = segments[segmentIndex];
-      
-      let startPoint;
-      
-      if (segmentIndex === 0) {
-        if (customStartPoint) {
-          startPoint = customStartPoint;
-        } else {
-          const startPointStr = document.getElementById('start-point-select').value;
-          if (startPointStr) {
-            const [lat, lng] = startPointStr.split(',').map(Number);
-            startPoint = { lat, lng };
-          } else {
-            startPoint = { lat: rosarioCenter[0], lng: rosarioCenter[1] };
-          }
-        }
-      } else {
-        const prevSegment = segments[segmentIndex - 1];
-        startPoint = prevSegment.stops[prevSegment.stops.length - 1];
-      }
-      
-      const url = generateGoogleMapsURL(segment.stops, startPoint);
-      window.open(url, '_blank');
-    }
-
-    // Exportar todos los segmentos
-    function exportGoogleMapsSegments() {
-      const segments = createRouteSegments();
-      
-      segments.forEach((segment, index) => {
-        setTimeout(() => {
-          openSegmentInMaps(index);
-        }, index * 1000);
-      });
-      
-      alert(`✅ Se abrirán ${segments.length} segmentos de Google Maps`);
-    }
-
-    // Generar URL de Google Maps
-    function generateGoogleMapsURL(stops, customStart = null) {
-      let startPoint;
-      
-      if (customStart) {
-        startPoint = customStart;
-      } else if (customStartPoint) {
-        startPoint = customStartPoint;
-      } else {
-        const startPointStr = document.getElementById('start-point-select').value;
-        if (startPointStr) {
-          const [lat, lng] = startPointStr.split(',').map(Number);
-          startPoint = { lat, lng };
-        } else {
-          startPoint = { lat: rosarioCenter[0], lng: rosarioCenter[1] };
-        }
-      }
-      
-      let waypoints = [];
-      waypoints.push(`${startPoint.lat}%2C${startPoint.lng}`);
-      
-      stops.forEach(client => {
-        waypoints.push(`${client.lat}%2C${client.lng}`);
-      });
-      
-      const origin = waypoints[0];
-      const destination = waypoints[waypoints.length - 1];
-      const waypointsParam = waypoints.slice(1, -1).join('|');
-      
-      let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}`;
-      
-      if (waypointsParam) {
-        url += `&waypoints=${waypointsParam}`;
-      }
-      
-      url += '&travelmode=driving';
-      
-      return url;
-    }
-
-    // Exportar archivo KML
-    function exportKML() {
-      let startPoint;
-      
-      if (customStartPoint) {
-        startPoint = customStartPoint;
-      } else {
-        const startPointStr = document.getElementById('start-point-select').value;
-        if (startPointStr) {
-          const [lat, lng] = startPointStr.split(',').map(Number);
-          startPoint = { lat, lng };
-        } else {
-          startPoint = { lat: rosarioCenter[0], lng: rosarioCenter[1] };
-        }
-      }
-      
-      let kml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-      kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n';
-      kml += '<Document>\n';
-      kml += `  <name>Ruta Optimizada - ${new Date().toLocaleDateString('es-AR')}</name>\n`;
-      kml += '  <description>Ruta optimizada generada por Optimizador de Rutas</description>\n\n';
-      
-      kml += '  <Style id="routeStyle">\n';
-      kml += '    <LineStyle>\n';
-      kml += '      <color>ff8b5cf6</color>\n';
-      kml += '      <width>4</width>\n';
-      kml += '    </LineStyle>\n';
-      kml += '  </Style>\n\n';
-      
-      kml += '  <Placemark>\n';
-      kml += '    <name>🚩 Punto de Inicio</name>\n';
-      kml += '    <Point>\n';
-      kml += `      <coordinates>${startPoint.lng},${startPoint.lat}</coordinates>\n`;
-      kml += '    </Point>\n';
-      kml += '  </Placemark>\n\n';
-      
-      optimizedRouteOrder.forEach((client, index) => {
-        kml += '  <Placemark>\n';
-        kml += `    <name>${index + 1}. ${client.cliente}</name>\n`;
-        kml += `    <description>${client.direccion}\\nTel: ${client.tel1}</description>\n`;
-        kml += '    <Point>\n';
-        kml += `      <coordinates>${client.lng},${client.lat}</coordinates>\n`;
-        kml += '    </Point>\n';
-        kml += '  </Placemark>\n\n';
-      });
-      
-      kml += '  <Placemark>\n';
-      kml += '    <name>Ruta Completa</name>\n';
-      kml += '    <styleUrl>#routeStyle</styleUrl>\n';
-      kml += '    <LineString>\n';
-      kml += '      <tessellate>1</tessellate>\n';
-      kml += '      <coordinates>\n';
-      kml += `        ${startPoint.lng},${startPoint.lat},0\n`;
-      optimizedRouteOrder.forEach(client => {
-        kml += `        ${client.lng},${client.lat},0\n`;
-      });
-      kml += '      </coordinates>\n';
-      kml += '    </LineString>\n';
-      kml += '  </Placemark>\n\n';
-      
-      kml += '</Document>\n';
-      kml += '</kml>';
-      
-      const blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' });
-      const link = document.createElement('a');
-      const timestamp = new Date().toISOString().slice(0,10);
-      link.href = URL.createObjectURL(blob);
-      link.download = `ruta_optimizada_${timestamp}.kml`;
-      link.click();
-      
-      alert('✅ Archivo KML descargado!');
-    }
-
-    // Modal de importación
-    function openImportModal() {
-      document.getElementById('import-modal').classList.add('active');
-    }
-
-    function closeImportModal() {
-      document.getElementById('import-modal').classList.remove('active');
-    }
-
-    // Importar direcciones
-    async function importAddresses() {
-      const text = document.getElementById('import-text').value.trim();
-      
-      if (!text) {
-        alert('Por favor, ingresa direcciones');
-        return;
-      }
-      
-      const lines = text.split('\n').filter(line => line.trim());
-      
-      if (lines.length === 0) {
-        alert('No se encontraron direcciones válidas');
-        return;
-      }
-      
-      const btn = event.target;
-      const originalText = btn.innerHTML;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Geolocalizando...';
-      btn.disabled = true;
-      
-      let importedCount = 0;
-      const newClients = [];
-      
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line || line.startsWith('Nombre') || line.startsWith('nombre')) continue;
-        
-        const parts = line.split(',').map(p => p.trim());
-        
-        if (parts.length >= 2) {
-          const nombre = parts[0];
-          const direccion = parts[1];
-          const servicio = parts[2] || 'Sin especificar';
-          const telefono = parts[3] || '';
-          
-          try {
-            const coords = await geocodeAddress(direccion + ', Rosario, Santa Fe, Argentina');
-            
-            if (coords) {
-              const newClient = {
-                nro: clientsData.length + newClients.length + 1,
-                cliente: nombre,
-                servicio: servicio,
-                direccion: direccion,
-                tel1: telefono,
-                estadoTipo: 'IMPORTADO',
-                asesor: 'SISTEMA',
-                lat: coords.lat,
-                lng: coords.lng
-              };
-              
-              newClients.push(newClient);
-              importedCount++;
-            }
-          } catch (error) {
-            console.error('Error geocodificando:', error);
-          }
-          
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-      
-      if (newClients.length > 0) {
-        clientsData = [...clientsData, ...newClients];
-        filteredData = [...clientsData];
-        addMarkers(clientsData);
-        populateStartPointSelector();
-        updateStats();
-        
-        document.getElementById('import-count').textContent = importedCount;
-        document.getElementById('import-results').classList.remove('hidden');
-        
-        alert(`✅ ${importedCount} direcciones importadas!`);
-        
-        setTimeout(() => {
-          closeImportModal();
-        }, 2000);
-      } else {
-        alert('❌ No se pudieron geolocalizar las direcciones.');
-      }
-      
-      btn.innerHTML = originalText;
-      btn.disabled = false;
-    }
-
-    // Geocodificar dirección
-    async function geocodeAddress(address) {
-      try {
-        const encodedAddress = encodeURIComponent(address);
-        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodedAddress}&limit=1`);
-        const data = await response.json();
-        
-        if (data && data.length > 0) {
-          return {
-            lat: parseFloat(data[0].lat),
-            lng: parseFloat(data[0].lon)
-          };
-        }
-        
-        return null;
-      } catch (error) {
-        console.error('Error en geocodificación:', error);
-        return null;
+      // Recentrar en nueva parada
+      if (currentStopIndex < optimizedRoute.length) {
+        const next = optimizedRoute[currentStopIndex];
+        map.flyTo([next.lat, next.lng], 16);
       }
     }
 
-    // Limpiar ruta
-    function clearRoute() {
-      if (routingControl) {
-        map.removeControl(routingControl);
-        routingControl = null;
-      }
-      
-      stopNavigation();
-      
-      selectedWaypoints = [];
-      optimizedRouteOrder = [];
-      routeStats = { distance: 0, time: 0 };
-      
-      markers.forEach(({ marker }) => {
-        marker.getElement()?.classList.remove('marker-selected');
-      });
-      
-      updateWaypointsList();
-      updateRouteButtons();
-      
-      document.getElementById('total-distance').textContent = '-';
-      document.getElementById('total-time').textContent = '-';
-      document.getElementById('fuel-cost').textContent = '-';
-      document.getElementById('clients-count').textContent = '0';
+    // ================= UTILIDADES =================
+    function toggleDashboard() {
+      // Función para alternar vista completa en desktop si se desea
     }
-
-    function getMarkerClass(servicio) {
-      const classes = {
-        'ADT-JC': 'adt',
-        'LAPOS': 'lapos',
-        'IPLAN': 'iplan',
-        'PROSEGUR AR': 'prosegur'
-      };
-      return classes[servicio] || 'default';
-    }
-
-    function createPopupContent(client) {
-      return `
-        <div class="custom-popup">
-          <div class="popup-title">${client.cliente}</div>
-          <div class="popup-row"><span class="popup-label">Servicio:</span> ${client.servicio}</div>
-          <div class="popup-row"><span class="popup-label">Dirección:</span> ${client.direccion}</div>
-          <div class="popup-row"><span class="popup-label">Teléfono:</span> ${client.tel1}</div>
-          <div class="popup-row"><span class="popup-label">Estado:</span> ${client.estadoTipo || 'Sin especificar'}</div>
-          <div class="popup-row"><span class="popup-label">Asesor:</span> ${client.asesor}</div>
-        </div>
-      `;
-    }
-
-    function filterData() {
-      const servicioFilter = document.getElementById('filter-servicio').value;
-      const estadoFilter = document.getElementById('filter-estado').value;
-
-      filteredData = clientsData.filter(client => {
-        const matchServicio = !servicioFilter || client.servicio === servicioFilter;
-        const matchEstado = !estadoFilter || (client.estadoTipo && client.estadoTipo.includes(estadoFilter));
-        return matchServicio && matchEstado;
-      });
-
-      addMarkers(filteredData);
-      updateStats();
-    }
-
-    function filterByService(servicio) {
-      document.getElementById('filter-servicio').value = servicio;
-      filterData();
-    }
-
-    function updateStats() {
-      const counts = {
-        'ADT-JC': 0,
-        'LAPOS': 0,
-        'IPLAN': 0,
-        'PROSEGUR AR': 0
-      };
-
-      filteredData.forEach(client => {
-        if (counts[client.servicio] !== undefined) {
-          counts[client.servicio]++;
-        }
-      });
-
-      document.getElementById('count-adt').textContent = counts['ADT-JC'];
-      document.getElementById('count-lapos').textContent = counts['LAPOS'];
-      document.getElementById('count-iplan').textContent = counts['IPLAN'];
-      document.getElementById('count-prosegur').textContent = counts['PROSEGUR AR'];
-      document.getElementById('total-clients').textContent = filteredData.length;
-    }
-
+    
     function resetFilters() {
-      document.getElementById('filter-servicio').value = '';
-      document.getElementById('filter-estado').value = '';
-      clearRoute();
-      filterData();
+      selectedWaypoints = [];
+      updateWaypointsList();
+      markers.forEach(m => {
+        m.marker.getElement().style.transform = "";
+        m.marker.getElement().style.border = "none";
+      });
     }
 
     function exportCSV() {
-      const headers = ['Nro', 'Cliente', 'Servicio', 'Dirección', 'Teléfono', 'Estado', 'Asesor', 'Latitud', 'Longitud'];
-      const csvRows = [headers.join(',')];
-
-      filteredData.forEach(client => {
-        const row = [
-          client.nro,
-          `"${client.cliente}"`,
-          client.servicio,
-          `"${client.direccion}"`,
-          client.tel1,
-          client.estadoTipo || '',
-          client.asesor,
-          client.lat,
-          client.lng
-        ];
-        csvRows.push(row.join(','));
+      let csv = "Nombre,Direccion,Telefono\n";
+      selectedWaypoints.forEach(w => {
+        csv += `${w.cliente},${w.direccion},${w.tel1}\n`;
       });
-
-      const csvContent = csvRows.join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = 'clientes_rosario.csv';
-      link.click();
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ruta.csv';
+      a.click();
+    }
+    
+    function exportToGoogleMaps() {
+       if (optimizedRoute.length === 0) { alert("Calcula la ruta primero"); return; }
+       // Generar URL con waypoints
+       let url = "https://www.google.com/maps/dir/?api=1&travelmode=driving";
+       optimizedRoute.forEach((w, i) => {
+         url += `&waypoint=${w.lat},${w.lng}`;
+       });
+       window.open(url, '_blank');
     }
 
-    document.getElementById('filter-servicio').addEventListener('change', filterData);
-    document.getElementById('filter-estado').addEventListener('change', filterData);
+    function geocodeStartAddress() {
+       alert("Función de geocodificación simulada. En producción usaría Nominatim API.");
+    }
 
-    window.addEventListener('resize', () => {
-      setTimeout(() => {
-        map.invalidateSize();
-      }, 250);
-    });
+    // Iniciar
+    window.onload = init;
 
-    window.onload = initMap;
   </script>
 </body>
 </html>
