@@ -1038,7 +1038,7 @@
         return;
       }
       
-      const totalStops = optimizedRouteOrder.length;
+      const totalStops = optimizedRoute.length;
       document.getElementById('option-direct').style.display = totalStops <= 10 ? 'block' : 'none';
       document.getElementById('option-segments').style.display = totalStops > 10 ? 'block' : 'none';
       
@@ -1108,13 +1108,7 @@
         if (customStartPoint) {
           startPoint = customStartPoint;
         } else {
-          const startPointStr = document.getElementById('start-point-select').value;
-          if (startPointStr) {
-            const [lat, lng] = startPointStr.split(',').map(Number);
-            startPoint = { lat, lng };
-          } else {
-            startPoint = { lat: rosarioCenter[0], lng: rosarioCenter[1] };
-          }
+          startPoint = { lat: -32.9520, lng: -60.6680 };
         }
       } else {
         const prevSegment = segments[segmentIndex - 1];
@@ -1145,7 +1139,7 @@
       } else if (customStartPoint) {
         startPoint = customStartPoint;
       } else {
-        startPoint = { lat: rosarioCenter[0], lng: rosarioCenter[1] };
+        startPoint = { lat: -32.9520, lng: -60.6680 };
       }
       
       let waypoints = [];
@@ -1176,7 +1170,7 @@
       if (customStartPoint) {
         startPoint = customStartPoint;
       } else {
-        startPoint = { lat: rosarioCenter[0], lng: rosarioCenter[1] };
+        startPoint = { lat: -32.9520, lng: -60.6680 };
       }
       
       let kml = '<?xml version="1.0" encoding="UTF-8"?>\n';
@@ -1310,10 +1304,11 @@
       
       if (newClients.length > 0) {
         clientsData = [...clientsData, ...newClients];
-        filteredData = [...clientsData];
-        addMarkers(clientsData);
-        populateStartPointSelector();
-        updateStats();
+        // No actualizamos filteredData aquí para no romper el filtro actual, 
+        // pero sí recargamos los marcadores
+        loadMarkers(map); 
+        loadMarkers(miniMap);
+        applyFilters(); // Re-aplicar filtros para mostrar los nuevos si coinciden
         
         document.getElementById('import-count').textContent = importedCount;
         document.getElementById('import-results').classList.remove('hidden');
