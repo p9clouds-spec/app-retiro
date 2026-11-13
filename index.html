@@ -56,6 +56,13 @@
       box-shadow: 0 0 15px rgba(139, 92, 246, 0.6);
       z-index: 1000 !important;
     }
+    .marker-start { 
+      border: 4px solid #10b981 !important;
+      background-color: #10b981 !important;
+      transform: scale(1.4) !important;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.8);
+      z-index: 1001 !important;
+    }
     .marker-adt { background-color: #ef4444; }
     .marker-lapos { background-color: #3b82f6; }
     .marker-iplan { background-color: #10b981; }
@@ -97,7 +104,7 @@
       background: white;
       border-radius: 12px;
       padding: 24px;
-      max-width: 600px;
+      max-width: 700px;
       width: 90%;
       max-height: 80vh;
       overflow-y: auto;
@@ -163,9 +170,17 @@
           <label class="block text-sm font-semibold text-gray-700 mb-2">
             <i class="fas fa-flag-checkered mr-2"></i>Punto de Inicio
           </label>
-          <select id="start-point" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white">
-            <option value="">Centro de Rosario (-32.9520, -60.6680)</option>
-          </select>
+          <div class="space-y-2">
+            <select id="start-point-select" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-sm" onchange="handleStartPointChange()">
+              <option value="">Centro de Rosario (-32.9520, -60.6680)</option>
+            </select>
+            <input type="text" id="start-point-address" placeholder="O escribe una dirección..." 
+                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+                   onkeypress="if(event.key==='Enter') geocodeCustomAddress()">
+            <button onclick="geocodeCustomAddress()" id="btn-geocode" class="w-full px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium transition-colors">
+              <i class="fas fa-search-location mr-1"></i>Buscar Dirección
+            </button>
+          </div>
         </div>
 
         <!-- Botones -->
@@ -258,11 +273,8 @@
           <button onclick="exportRouteText()" id="btn-export-txt" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled>
             <i class="fas fa-file-alt mr-2"></i>Exportar TXT
           </button>
-          <button onclick="exportGoogleMapsURL()" id="btn-export-gmaps" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-            <i class="fas fa-map-marked-alt mr-2"></i>Google Maps URL
-          </button>
-          <button onclick="copyGoogleMapsURL()" id="btn-copy-gmaps" class="px-4 py-2 bg-gray-700 hover:bg-gray-800 text-white rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-            <i class="fas fa-copy mr-2"></i>Copiar URL
+          <button onclick="openExportModal()" id="btn-export-gmaps" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+            <i class="fas fa-map-marked-alt mr-2"></i>Exportar a Google Maps
           </button>
         </div>
       </div>
@@ -294,6 +306,76 @@
   <!-- Mapa -->
   <div class="container mx-auto px-4 pb-4">
     <div id="map" class="shadow-lg border-2 border-gray-200"></div>
+  </div>
+
+  <!-- Modal de Exportación a Google Maps -->
+  <div id="export-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold text-gray-800">
+          <i class="fas fa-map-marked-alt mr-2 text-red-600"></i>Exportar Ruta a Google Maps
+        </h2>
+        <button onclick="closeExportModal()" class="text-gray-500 hover:text-gray-700">
+          <i class="fas fa-times text-2xl"></i>
+        </button>
+      </div>
+
+      <div class="space-y-4">
+        <!-- Información -->
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <p class="text-sm text-blue-800">
+            <i class="fas fa-info-circle mr-2"></i>
+            Google Maps permite hasta 10 paradas intermedias. Para rutas más largas, generaremos múltiples opciones.
+          </p>
+        </div>
+
+        <!-- Opción 1: URL directa (hasta 10 paradas) -->
+        <div id="option-direct" class="bg-white border-2 border-gray-200 rounded-lg p-4">
+          <h3 class="font-bold text-gray-800 mb-2">
+            <i class="fas fa-link mr-2 text-blue-600"></i>Opción 1: URL Directa (Hasta 10 paradas)
+          </h3>
+          <p class="text-sm text-gray-600 mb-3">Abre Google Maps directamente con la ruta optimizada</p>
+          <button onclick="exportGoogleMapsDirect()" class="w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors">
+            <i class="fas fa-external-link-alt mr-2"></i>Abrir en Google Maps
+          </button>
+        </div>
+
+        <!-- Opción 2: Múltiples segmentos (más de 10 paradas) -->
+        <div id="option-segments" class="bg-white border-2 border-gray-200 rounded-lg p-4">
+          <h3 class="font-bold text-gray-800 mb-2">
+            <i class="fas fa-cut mr-2 text-green-600"></i>Opción 2: Ruta por Segmentos (Más de 10 paradas)
+          </h3>
+          <p class="text-sm text-gray-600 mb-3">Divide la ruta en segmentos de 10 paradas cada uno</p>
+          <div id="segments-list" class="space-y-2 mb-3"></div>
+          <button onclick="exportGoogleMapsSegments()" class="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors">
+            <i class="fas fa-layer-group mr-2"></i>Generar Todos los Segmentos
+          </button>
+        </div>
+
+        <!-- Opción 3: Archivo KML -->
+        <div class="bg-white border-2 border-gray-200 rounded-lg p-4">
+          <h3 class="font-bold text-gray-800 mb-2">
+            <i class="fas fa-file-code mr-2 text-purple-600"></i>Opción 3: Archivo KML (Rutas Ilimitadas)
+          </h3>
+          <p class="text-sm text-gray-600 mb-3">Descarga un archivo KML que puedes importar en Google Maps con todas las paradas</p>
+          <button onclick="exportKML()" class="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-colors">
+            <i class="fas fa-download mr-2"></i>Descargar Archivo KML
+          </button>
+        </div>
+
+        <!-- Opción 4: Copiar coordenadas -->
+        <div class="bg-white border-2 border-gray-200 rounded-lg p-4">
+          <h3 class="font-bold text-gray-800 mb-2">
+            <i class="fas fa-copy mr-2 text-orange-600"></i>Opción 4: Copiar Coordenadas
+          </h3>
+          <p class="text-sm text-gray-600 mb-3">Copia todas las coordenadas para pegarlas manualmente</p>
+          <textarea id="coordinates-text" rows="4" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-xs font-mono"></textarea>
+          <button onclick="copyCoordinates()" class="mt-2 w-full px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-semibold transition-colors">
+            <i class="fas fa-copy mr-2"></i>Copiar al Portapapeles
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Modal de Importación -->
@@ -416,6 +498,8 @@
     let selectionMode = false;
     let routingControl = null;
     let routeStats = { distance: 0, time: 0 };
+    let customStartPoint = null;
+    let startMarker = null;
     const rosarioCenter = [-32.9520, -60.6680];
 
     // Inicializar mapa
@@ -432,13 +516,95 @@
 
     // Poblar selector de puntos de inicio
     function populateStartPointSelector() {
-      const select = document.getElementById('start-point');
+      const select = document.getElementById('start-point-select');
       clientsData.forEach((client, index) => {
         const option = document.createElement('option');
         option.value = `${client.lat},${client.lng}`;
         option.textContent = `${index + 1}. ${client.cliente} (${client.servicio})`;
         select.appendChild(option);
       });
+    }
+
+    // Manejar cambio en selector de punto de inicio
+    function handleStartPointChange() {
+      const selectValue = document.getElementById('start-point-select').value;
+      const addressInput = document.getElementById('start-point-address');
+      
+      if (selectValue) {
+        addressInput.value = '';
+        customStartPoint = null;
+        removeStartMarker();
+        
+        const [lat, lng] = selectValue.split(',').map(Number);
+        addStartMarker(lat, lng, 'Cliente seleccionado');
+      }
+    }
+
+    // Geocodificar dirección personalizada
+    async function geocodeCustomAddress() {
+      const address = document.getElementById('start-point-address').value.trim();
+      
+      if (!address) {
+        alert('Por favor, ingresa una dirección');
+        return;
+      }
+      
+      const btn = document.getElementById('btn-geocode');
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Buscando...';
+      btn.disabled = true;
+      
+      try {
+        const coords = await geocodeAddress(address + ', Rosario, Santa Fe, Argentina');
+        
+        if (coords) {
+          customStartPoint = coords;
+          
+          // Limpiar selector
+          document.getElementById('start-point-select').value = '';
+          
+          // Agregar marcador de inicio
+          removeStartMarker();
+          addStartMarker(coords.lat, coords.lng, address);
+          
+          // Centrar mapa
+          map.setView([coords.lat, coords.lng], 15);
+          
+          alert(`✅ Dirección encontrada:\n${address}\n\nCoordenadas: ${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`);
+        } else {
+          alert('❌ No se pudo encontrar la dirección. Intenta con una dirección más específica.');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Error al buscar la dirección');
+      } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }
+    }
+
+    // Agregar marcador de punto de inicio
+    function addStartMarker(lat, lng, label) {
+      removeStartMarker();
+      
+      const startIcon = L.divIcon({
+        className: 'marker-icon marker-start',
+        html: '<i class="fas fa-flag-checkered"></i>',
+        iconSize: [35, 35],
+        iconAnchor: [17, 17]
+      });
+      
+      startMarker = L.marker([lat, lng], { icon: startIcon })
+        .addTo(map)
+        .bindPopup(`<div class="custom-popup"><div class="popup-title">🚩 Punto de Inicio</div><div class="popup-row">${label}</div></div>`);
+    }
+
+    // Remover marcador de punto de inicio
+    function removeStartMarker() {
+      if (startMarker) {
+        map.removeLayer(startMarker);
+        startMarker = null;
+      }
     }
 
     // Agregar marcadores
@@ -555,7 +721,6 @@
       const btnClear = document.getElementById('btn-clear');
       const btnExportTxt = document.getElementById('btn-export-txt');
       const btnExportGmaps = document.getElementById('btn-export-gmaps');
-      const btnCopyGmaps = document.getElementById('btn-copy-gmaps');
       
       if (selectedWaypoints.length >= 2) {
         btnCalculate.disabled = false;
@@ -569,11 +734,9 @@
       if (optimizedRouteOrder.length > 0) {
         btnExportTxt.disabled = false;
         btnExportGmaps.disabled = false;
-        btnCopyGmaps.disabled = false;
       } else {
         btnExportTxt.disabled = true;
         btnExportGmaps.disabled = true;
-        btnCopyGmaps.disabled = true;
       }
     }
 
@@ -590,14 +753,19 @@
       btn.disabled = true;
       
       try {
-        const startPointStr = document.getElementById('start-point').value;
+        // Obtener punto de inicio
         let startPoint;
         
-        if (startPointStr) {
-          const [lat, lng] = startPointStr.split(',').map(Number);
-          startPoint = { lat, lng };
+        if (customStartPoint) {
+          startPoint = customStartPoint;
         } else {
-          startPoint = { lat: rosarioCenter[0], lng: rosarioCenter[1] };
+          const startPointStr = document.getElementById('start-point-select').value;
+          if (startPointStr) {
+            const [lat, lng] = startPointStr.split(',').map(Number);
+            startPoint = { lat, lng };
+          } else {
+            startPoint = { lat: rosarioCenter[0], lng: rosarioCenter[1] };
+          }
         }
         
         // Optimizar orden de visita
@@ -723,16 +891,21 @@
         return;
       }
       
-      const startPointStr = document.getElementById('start-point').value;
       let startPointName = "Centro de Rosario";
       let startPointCoords = rosarioCenter;
       
-      if (startPointStr) {
-        const [lat, lng] = startPointStr.split(',').map(Number);
-        startPointCoords = [lat, lng];
-        const startClient = clientsData.find(c => Math.abs(c.lat - lat) < 0.001 && Math.abs(c.lng - lng) < 0.001);
-        if (startClient) {
-          startPointName = startClient.cliente;
+      if (customStartPoint) {
+        startPointName = document.getElementById('start-point-address').value || "Dirección personalizada";
+        startPointCoords = [customStartPoint.lat, customStartPoint.lng];
+      } else {
+        const startPointStr = document.getElementById('start-point-select').value;
+        if (startPointStr) {
+          const [lat, lng] = startPointStr.split(',').map(Number);
+          startPointCoords = [lat, lng];
+          const startClient = clientsData.find(c => Math.abs(c.lat - lat) < 0.001 && Math.abs(c.lng - lng) < 0.001);
+          if (startClient) {
+            startPointName = startClient.cliente;
+          }
         }
       }
       
@@ -798,52 +971,183 @@
       alert(`✅ Archivo de ruta exportado exitosamente!\n\nSe descargó: ruta_optimizada_${timestamp}.txt`);
     }
 
-    // Exportar URL de Google Maps
-    function exportGoogleMapsURL() {
+    // Modal de exportación
+    function openExportModal() {
       if (optimizedRouteOrder.length === 0) {
         alert('Primero calcula una ruta óptima');
         return;
       }
       
-      const url = generateGoogleMapsURL();
+      // Preparar coordenadas
+      updateCoordinatesText();
       
-      // Abrir en nueva pestaña
-      window.open(url, '_blank');
+      // Mostrar/ocultar opciones según cantidad de paradas
+      const totalStops = optimizedRouteOrder.length;
+      document.getElementById('option-direct').style.display = totalStops <= 10 ? 'block' : 'none';
+      document.getElementById('option-segments').style.display = totalStops > 10 ? 'block' : 'none';
       
-      alert('✅ Se abrió Google Maps con la ruta optimizada en una nueva pestaña');
+      // Generar segmentos si es necesario
+      if (totalStops > 10) {
+        generateSegmentsList();
+      }
+      
+      document.getElementById('export-modal').classList.add('active');
     }
 
-    // Copiar URL de Google Maps al portapapeles
-    function copyGoogleMapsURL() {
-      if (optimizedRouteOrder.length === 0) {
-        alert('Primero calcula una ruta óptima');
-        return;
+    function closeExportModal() {
+      document.getElementById('export-modal').classList.remove('active');
+    }
+
+    // Actualizar texto de coordenadas
+    function updateCoordinatesText() {
+      let startPoint;
+      
+      if (customStartPoint) {
+        startPoint = customStartPoint;
+      } else {
+        const startPointStr = document.getElementById('start-point-select').value;
+        if (startPointStr) {
+          const [lat, lng] = startPointStr.split(',').map(Number);
+          startPoint = { lat, lng };
+        } else {
+          startPoint = { lat: rosarioCenter[0], lng: rosarioCenter[1] };
+        }
       }
       
-      const url = generateGoogleMapsURL();
+      let coords = `${startPoint.lat.toFixed(6)},${startPoint.lng.toFixed(6)}\n`;
+      optimizedRouteOrder.forEach(client => {
+        coords += `${client.lat.toFixed(6)},${client.lng.toFixed(6)}\n`;
+      });
       
-      navigator.clipboard.writeText(url).then(() => {
-        alert('✅ URL de Google Maps copiada al portapapeles!\n\nPuedes compartirla o pegarla donde necesites.');
-      }).catch(err => {
-        console.error('Error al copiar:', err);
-        prompt('Copia esta URL manualmente:', url);
+      document.getElementById('coordinates-text').value = coords;
+    }
+
+    // Copiar coordenadas
+    function copyCoordinates() {
+      const text = document.getElementById('coordinates-text').value;
+      navigator.clipboard.writeText(text).then(() => {
+        alert('✅ Coordenadas copiadas al portapapeles!');
+      }).catch(() => {
+        prompt('Copia manualmente:', text);
       });
     }
 
+    // Exportar URL directa de Google Maps (hasta 10 paradas)
+    function exportGoogleMapsDirect() {
+      const url = generateGoogleMapsURL(optimizedRouteOrder);
+      window.open(url, '_blank');
+    }
+
+    // Generar lista de segmentos
+    function generateSegmentsList() {
+      const segments = createRouteSegments();
+      const container = document.getElementById('segments-list');
+      
+      let html = '';
+      segments.forEach((segment, index) => {
+        html += `
+          <div class="bg-gray-50 border border-gray-200 rounded p-3">
+            <div class="flex justify-between items-center">
+              <div>
+                <span class="font-semibold text-sm">Segmento ${index + 1}:</span>
+                <span class="text-xs text-gray-600 ml-2">${segment.stops.length} paradas</span>
+              </div>
+              <button onclick="openSegmentInMaps(${index})" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs">
+                <i class="fas fa-external-link-alt mr-1"></i>Abrir
+              </button>
+            </div>
+          </div>
+        `;
+      });
+      
+      container.innerHTML = html;
+    }
+
+    // Crear segmentos de ruta
+    function createRouteSegments() {
+      const segments = [];
+      const chunkSize = 9; // 9 paradas + origen = 10 total
+      
+      for (let i = 0; i < optimizedRouteOrder.length; i += chunkSize) {
+        const chunk = optimizedRouteOrder.slice(i, i + chunkSize);
+        segments.push({
+          stops: chunk,
+          startIndex: i,
+          endIndex: i + chunk.length - 1
+        });
+      }
+      
+      return segments;
+    }
+
+    // Abrir segmento en Google Maps
+    function openSegmentInMaps(segmentIndex) {
+      const segments = createRouteSegments();
+      const segment = segments[segmentIndex];
+      
+      let startPoint;
+      
+      if (segmentIndex === 0) {
+        // Primer segmento usa el punto de inicio original
+        if (customStartPoint) {
+          startPoint = customStartPoint;
+        } else {
+          const startPointStr = document.getElementById('start-point-select').value;
+          if (startPointStr) {
+            const [lat, lng] = startPointStr.split(',').map(Number);
+            startPoint = { lat, lng };
+          } else {
+            startPoint = { lat: rosarioCenter[0], lng: rosarioCenter[1] };
+          }
+        }
+      } else {
+        // Segmentos posteriores usan la última parada del segmento anterior
+        const prevSegment = segments[segmentIndex - 1];
+        startPoint = prevSegment.stops[prevSegment.stops.length - 1];
+      }
+      
+      const url = generateGoogleMapsURL(segment.stops, startPoint);
+      window.open(url, '_blank');
+    }
+
+    // Exportar todos los segmentos
+    function exportGoogleMapsSegments() {
+      const segments = createRouteSegments();
+      
+      segments.forEach((segment, index) => {
+        setTimeout(() => {
+          openSegmentInMaps(index);
+        }, index * 1000); // Abrir con 1 segundo de diferencia
+      });
+      
+      alert(`✅ Se abrirán ${segments.length} segmentos de Google Maps en pestañas separadas`);
+    }
+
     // Generar URL de Google Maps
-    function generateGoogleMapsURL() {
-      const startPointStr = document.getElementById('start-point').value;
+    function generateGoogleMapsURL(stops, customStart = null) {
+      let startPoint;
+      
+      if (customStart) {
+        startPoint = customStart;
+      } else if (customStartPoint) {
+        startPoint = customStartPoint;
+      } else {
+        const startPointStr = document.getElementById('start-point-select').value;
+        if (startPointStr) {
+          const [lat, lng] = startPointStr.split(',').map(Number);
+          startPoint = { lat, lng };
+        } else {
+          startPoint = { lat: rosarioCenter[0], lng: rosarioCenter[1] };
+        }
+      }
+      
       let waypoints = [];
       
       // Agregar punto de inicio
-      if (startPointStr) {
-        waypoints.push(startPointStr.replace(',', '%2C'));
-      } else {
-        waypoints.push(`${rosarioCenter[0]}%2C${rosarioCenter[1]}`);
-      }
+      waypoints.push(`${startPoint.lat}%2C${startPoint.lng}`);
       
-      // Agregar waypoints optimizados
-      optimizedRouteOrder.forEach(client => {
+      // Agregar waypoints
+      stops.forEach(client => {
         waypoints.push(`${client.lat}%2C${client.lng}`);
       });
       
@@ -861,6 +1165,86 @@
       url += '&travelmode=driving';
       
       return url;
+    }
+
+    // Exportar archivo KML
+    function exportKML() {
+      let startPoint;
+      
+      if (customStartPoint) {
+        startPoint = customStartPoint;
+      } else {
+        const startPointStr = document.getElementById('start-point-select').value;
+        if (startPointStr) {
+          const [lat, lng] = startPointStr.split(',').map(Number);
+          startPoint = { lat, lng };
+        } else {
+          startPoint = { lat: rosarioCenter[0], lng: rosarioCenter[1] };
+        }
+      }
+      
+      // Generar contenido KML
+      let kml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+      kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n';
+      kml += '<Document>\n';
+      kml += `  <name>Ruta Optimizada - ${new Date().toLocaleDateString('es-AR')}</name>\n`;
+      kml += '  <description>Ruta optimizada generada por Optimizador de Rutas - Clientes Rosario</description>\n\n';
+      
+      // Estilo para la línea
+      kml += '  <Style id="routeStyle">\n';
+      kml += '    <LineStyle>\n';
+      kml += '      <color>ff8b5cf6</color>\n';
+      kml += '      <width>4</width>\n';
+      kml += '    </LineStyle>\n';
+      kml += '  </Style>\n\n';
+      
+      // Placemark para el punto de inicio
+      kml += '  <Placemark>\n';
+      kml += '    <name>🚩 Punto de Inicio</name>\n';
+      kml += '    <description>Inicio de la ruta</description>\n';
+      kml += '    <Point>\n';
+      kml += `      <coordinates>${startPoint.lng},${startPoint.lat}</coordinates>\n`;
+      kml += '    </Point>\n';
+      kml += '  </Placemark>\n\n';
+      
+      // Placemarks para cada parada
+      optimizedRouteOrder.forEach((client, index) => {
+        kml += '  <Placemark>\n';
+        kml += `    <name>${index + 1}. ${client.cliente}</name>\n`;
+        kml += `    <description>${client.direccion}\\nTel: ${client.tel1}\\nServicio: ${client.servicio}</description>\n`;
+        kml += '    <Point>\n';
+        kml += `      <coordinates>${client.lng},${client.lat}</coordinates>\n`;
+        kml += '    </Point>\n';
+        kml += '  </Placemark>\n\n';
+      });
+      
+      // LineString para la ruta completa
+      kml += '  <Placemark>\n';
+      kml += '    <name>Ruta Completa</name>\n';
+      kml += '    <styleUrl>#routeStyle</styleUrl>\n';
+      kml += '    <LineString>\n';
+      kml += '      <tessellate>1</tessellate>\n';
+      kml += '      <coordinates>\n';
+      kml += `        ${startPoint.lng},${startPoint.lat},0\n`;
+      optimizedRouteOrder.forEach(client => {
+        kml += `        ${client.lng},${client.lat},0\n`;
+      });
+      kml += '      </coordinates>\n';
+      kml += '    </LineString>\n';
+      kml += '  </Placemark>\n\n';
+      
+      kml += '</Document>\n';
+      kml += '</kml>';
+      
+      // Descargar archivo
+      const blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' });
+      const link = document.createElement('a');
+      const timestamp = new Date().toISOString().slice(0,10);
+      link.href = URL.createObjectURL(blob);
+      link.download = `ruta_optimizada_${timestamp}.kml`;
+      link.click();
+      
+      alert('✅ Archivo KML descargado!\n\nPara usarlo:\n1. Ve a Google Maps\n2. Menú → Tus lugares → Mapas → Crear mapa\n3. Importar → Selecciona el archivo KML');
     }
 
     // Modal de importación
