@@ -33,7 +33,6 @@
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
       z-index: 1;
-      /* Forzar altura para evitar problemas de renderizado */
       height: 100vh !important; 
       width: 100vw !important;
     }
@@ -94,7 +93,7 @@
 
     /* Instrucciones de giro grandes */
     .instruction-box {
-      background: #2563eb; /* Azul intenso */
+      background: #2563eb;
       color: white;
       border-radius: 16px;
       padding: 16px;
@@ -226,7 +225,7 @@
     <!-- Contenido Dashboard -->
     <div class="container mx-auto px-4 py-6 space-y-6 max-w-4xl">
       
-      <!-- Filtros y Controles -->
+      <!-- PASO 1: FILTROS Y CONTROLES -->
       <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <label class="text-xs font-bold text-gray-500 uppercase tracking-wide">Servicio</label>
@@ -264,7 +263,7 @@
         </div>
       </div>
 
-      <!-- Selector de Ruta -->
+      <!-- PASO 2, 3 y 4: SELECCIÓN, PUNTO DE INICIO Y CÁLCULO -->
       <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
         <h3 class="font-bold text-gray-800 mb-4 text-lg flex items-center">
           <i class="fas fa-route mr-2 text-blue-600"></i> Planificación de Ruta
@@ -301,7 +300,7 @@
           </div>
         </div>
 
-        <!-- Lista de Paradas -->
+        <!-- Lista de Paradas Seleccionadas -->
         <div class="mb-4">
           <div class="flex justify-between items-center mb-2">
             <span class="text-sm font-bold text-gray-700">Paradas Seleccionadas (<span id="count-selected">0</span>)</span>
@@ -314,7 +313,7 @@
           </div>
         </div>
 
-        <!-- Botones de Acción Final -->
+        <!-- PASO 5 y 6: EXPORTAR A GOOGLE MAPS E INICIAR GPS -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
            <button onclick="openExportModal()" id="btn-export-gmaps" class="bg-red-500 hover:bg-red-600 text-white py-4 rounded-xl font-bold shadow-md transition-colors flex items-center justify-center disabled:opacity-50" disabled>
              <i class="fas fa-map-marked-alt mr-2"></i> Exportar a Google Maps
