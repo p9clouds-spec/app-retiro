@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Optimizador de Rutas - Clientes Rosario</title>
+  <title>GPS Navigator - Optimizador de Rutas Rosario</title>
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -26,7 +26,7 @@
 
   <style>
     body { font-family: 'Inter', sans-serif; }
-    #map { height: calc(100vh - 340px); min-height: 500px; border-radius: 12px; }
+    #map { height: calc(100vh - 380px); min-height: 500px; border-radius: 12px; }
     
     .custom-popup { font-size: 13px; line-height: 1.5; max-width: 280px; }
     .popup-title { font-weight: 700; color: #1e40af; margin-bottom: 6px; font-size: 15px; }
@@ -63,6 +63,18 @@
       box-shadow: 0 0 20px rgba(16, 185, 129, 0.8);
       z-index: 1001 !important;
     }
+    .marker-current {
+      border: 4px solid #ef4444 !important;
+      background-color: #ef4444 !important;
+      transform: scale(1.5) !important;
+      box-shadow: 0 0 25px rgba(239, 68, 68, 0.9);
+      z-index: 1002 !important;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1.5); }
+      50% { transform: scale(1.6); }
+    }
     .marker-adt { background-color: #ef4444; }
     .marker-lapos { background-color: #3b82f6; }
     .marker-iplan { background-color: #10b981; }
@@ -73,6 +85,15 @@
     }
     .waypoint-item:hover {
       background-color: #f3f4f6;
+    }
+    .waypoint-active {
+      background-color: #fef3c7 !important;
+      border-left: 4px solid #f59e0b;
+    }
+    .waypoint-completed {
+      background-color: #d1fae5 !important;
+      border-left: 4px solid #10b981;
+      opacity: 0.7;
     }
     
     .leaflet-routing-container {
@@ -109,6 +130,21 @@
       max-height: 80vh;
       overflow-y: auto;
     }
+
+    /* Panel de navegación GPS */
+    .gps-panel {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+    .gps-stat {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
   </style>
 </head>
 <body class="bg-gray-50">
@@ -120,8 +156,8 @@
         <div class="flex items-center space-x-3">
           <i class="fas fa-route text-3xl"></i>
           <div>
-            <h1 class="text-2xl font-bold">Optimizador de Rutas - Clientes Rosario</h1>
-            <p class="text-sm opacity-90">Planificación inteligente de visitas</p>
+            <h1 class="text-2xl font-bold">GPS Navigator - Clientes Rosario</h1>
+            <p class="text-sm opacity-90">Navegación en tiempo real</p>
           </div>
         </div>
         <div class="text-right hidden md:block">
@@ -268,13 +304,59 @@
           </div>
         </div>
 
+        <!-- Panel de Navegación GPS -->
+        <div id="gps-navigation-panel" class="gps-panel hidden">
+          <div class="flex items-center justify-between mb-3">
+            <h4 class="font-bold text-lg">
+              <i class="fas fa-satellite-dish mr-2"></i>Navegación GPS Activa
+            </h4>
+            <button onclick="stopNavigation()" class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-sm">
+              <i class="fas fa-stop mr-1"></i>Detener
+            </button>
+          </div>
+          
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+            <div class="gps-stat">
+              <div class="text-2xl font-bold" id="gps-next-stop">-</div>
+              <div class="text-xs opacity-90">Próxima Parada</div>
+            </div>
+            <div class="gps-stat">
+              <div class="text-2xl font-bold" id="gps-distance">-</div>
+              <div class="text-xs opacity-90">Distancia (km)</div>
+            </div>
+            <div class="gps-stat">
+              <div class="text-2xl font-bold" id="gps-time">-</div>
+              <div class="text-xs opacity-90">Tiempo (min)</div>
+            </div>
+            <div class="gps-stat">
+              <div class="text-2xl font-bold" id="gps-progress">0/0</div>
+              <div class="text-xs opacity-90">Progreso</div>
+            </div>
+          </div>
+          
+          <div class="bg-white bg-opacity-20 rounded-lg p-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm font-semibold" id="gps-current-client">Esperando inicio...</div>
+                <div class="text-xs opacity-90" id="gps-current-address">-</div>
+              </div>
+              <button onclick="navigateToNextStop()" class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold">
+                <i class="fas fa-directions mr-2"></i>Navegar
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Botones de Exportación de Ruta -->
         <div class="mt-4 flex flex-wrap gap-2">
           <button onclick="exportRouteText()" id="btn-export-txt" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled>
             <i class="fas fa-file-alt mr-2"></i>Exportar TXT
           </button>
           <button onclick="openExportModal()" id="btn-export-gmaps" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-            <i class="fas fa-map-marked-alt mr-2"></i>Exportar a Google Maps
+            <i class="fas fa-map-marked-alt mr-2"></i>Exportar Google Maps
+          </button>
+          <button onclick="startGPSNavigation()" id="btn-start-gps" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+            <i class="fas fa-satellite-dish mr-2"></i>Iniciar GPS
           </button>
         </div>
       </div>
@@ -321,7 +403,6 @@
       </div>
 
       <div class="space-y-4">
-        <!-- Información -->
         <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
           <p class="text-sm text-blue-800">
             <i class="fas fa-info-circle mr-2"></i>
@@ -329,49 +410,31 @@
           </p>
         </div>
 
-        <!-- Opción 1: URL directa (hasta 10 paradas) -->
         <div id="option-direct" class="bg-white border-2 border-gray-200 rounded-lg p-4">
           <h3 class="font-bold text-gray-800 mb-2">
             <i class="fas fa-link mr-2 text-blue-600"></i>Opción 1: URL Directa (Hasta 10 paradas)
           </h3>
-          <p class="text-sm text-gray-600 mb-3">Abre Google Maps directamente con la ruta optimizada</p>
           <button onclick="exportGoogleMapsDirect()" class="w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors">
             <i class="fas fa-external-link-alt mr-2"></i>Abrir en Google Maps
           </button>
         </div>
 
-        <!-- Opción 2: Múltiples segmentos (más de 10 paradas) -->
         <div id="option-segments" class="bg-white border-2 border-gray-200 rounded-lg p-4">
           <h3 class="font-bold text-gray-800 mb-2">
-            <i class="fas fa-cut mr-2 text-green-600"></i>Opción 2: Ruta por Segmentos (Más de 10 paradas)
+            <i class="fas fa-cut mr-2 text-green-600"></i>Opción 2: Ruta por Segmentos
           </h3>
-          <p class="text-sm text-gray-600 mb-3">Divide la ruta en segmentos de 10 paradas cada uno</p>
           <div id="segments-list" class="space-y-2 mb-3"></div>
           <button onclick="exportGoogleMapsSegments()" class="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors">
             <i class="fas fa-layer-group mr-2"></i>Generar Todos los Segmentos
           </button>
         </div>
 
-        <!-- Opción 3: Archivo KML -->
         <div class="bg-white border-2 border-gray-200 rounded-lg p-4">
           <h3 class="font-bold text-gray-800 mb-2">
             <i class="fas fa-file-code mr-2 text-purple-600"></i>Opción 3: Archivo KML (Rutas Ilimitadas)
           </h3>
-          <p class="text-sm text-gray-600 mb-3">Descarga un archivo KML que puedes importar en Google Maps con todas las paradas</p>
           <button onclick="exportKML()" class="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-colors">
             <i class="fas fa-download mr-2"></i>Descargar Archivo KML
-          </button>
-        </div>
-
-        <!-- Opción 4: Copiar coordenadas -->
-        <div class="bg-white border-2 border-gray-200 rounded-lg p-4">
-          <h3 class="font-bold text-gray-800 mb-2">
-            <i class="fas fa-copy mr-2 text-orange-600"></i>Opción 4: Copiar Coordenadas
-          </h3>
-          <p class="text-sm text-gray-600 mb-3">Copia todas las coordenadas para pegarlas manualmente</p>
-          <textarea id="coordinates-text" rows="4" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-xs font-mono"></textarea>
-          <button onclick="copyCoordinates()" class="mt-2 w-full px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-semibold transition-colors">
-            <i class="fas fa-copy mr-2"></i>Copiar al Portapapeles
           </button>
         </div>
       </div>
@@ -391,46 +454,24 @@
       </div>
 
       <div class="space-y-4">
-        <!-- Instrucciones -->
         <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
           <p class="text-sm text-blue-800">
             <i class="fas fa-info-circle mr-2"></i>
-            Sube un archivo CSV, Excel (.xlsx) o TXT con direcciones para geolocalizarlas automáticamente.
+            Sube un archivo CSV o TXT con direcciones para geolocalizarlas.
           </p>
         </div>
 
-        <!-- Formato esperado -->
-        <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
-          <p class="text-sm font-semibold text-gray-700 mb-2">Formato esperado (CSV/TXT):</p>
-          <code class="text-xs bg-gray-100 p-2 rounded block">
-            Nombre,Dirección,Servicio,Teléfono<br>
-            Juan Perez,San Martin 1234,LAPOS,3415123456<br>
-            Maria Lopez,Cordoba 5678,ADT-JC,3416789012
-          </code>
-        </div>
-
-        <!-- Input de archivo -->
         <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-2">Seleccionar archivo:</label>
-          <input type="file" id="import-file" accept=".csv,.txt,.xlsx,.xls" 
-                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
-                 onchange="handleFileImport(event)">
-        </div>
-
-        <!-- Área de texto alternativo -->
-        <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-2">O pega las direcciones aquí:</label>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Pega las direcciones aquí:</label>
           <textarea id="import-text" rows="6" 
                     class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
-                    placeholder="Nombre, Dirección&#10;Juan Perez, San Martin 1234&#10;Maria Lopez, Cordoba 5678"></textarea>
+                    placeholder="Nombre, Dirección&#10;Juan Perez, San Martin 1234"></textarea>
         </div>
 
-        <!-- Botón de importar -->
         <button onclick="importAddresses()" class="w-full px-4 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-semibold transition-colors">
           <i class="fas fa-map-marker-alt mr-2"></i>Geolocalizar Direcciones
         </button>
 
-        <!-- Resultados -->
         <div id="import-results" class="hidden">
           <div class="bg-green-50 border border-green-200 rounded-lg p-3">
             <p class="text-sm text-green-800 font-semibold">
@@ -446,8 +487,8 @@
   <!-- Footer -->
   <footer class="bg-gray-800 text-white py-4 mt-4">
     <div class="container mx-auto px-4 text-center">
-      <p class="text-sm">© 2026 Optimizador de Rutas - Clientes Rosario, Santa Fe</p>
-      <p class="text-xs text-gray-400 mt-1">Algoritmo TSP · GPS Verificado · Importación de datos</p>
+      <p class="text-sm">© 2026 GPS Navigator - Clientes Rosario, Santa Fe</p>
+      <p class="text-xs text-gray-400 mt-1">Navegación GPS en tiempo real · Algoritmo TSP</p>
     </div>
   </footer>
 
@@ -501,6 +542,14 @@
     let customStartPoint = null;
     let startMarker = null;
     const rosarioCenter = [-32.9520, -60.6680];
+    
+    // Variables de navegación GPS
+    let gpsActive = false;
+    let currentLocation = null;
+    let locationWatcher = null;
+    let currentStopIndex = 0;
+    let userMarker = null;
+    let navigationInterval = null;
 
     // Inicializar mapa
     function initMap() {
@@ -559,20 +608,13 @@
         
         if (coords) {
           customStartPoint = coords;
-          
-          // Limpiar selector
           document.getElementById('start-point-select').value = '';
-          
-          // Agregar marcador de inicio
           removeStartMarker();
           addStartMarker(coords.lat, coords.lng, address);
-          
-          // Centrar mapa
           map.setView([coords.lat, coords.lng], 15);
-          
-          alert(`✅ Dirección encontrada:\n${address}\n\nCoordenadas: ${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`);
+          alert(`✅ Dirección encontrada:\n${address}`);
         } else {
-          alert('❌ No se pudo encontrar la dirección. Intenta con una dirección más específica.');
+          alert('❌ No se pudo encontrar la dirección.');
         }
       } catch (error) {
         console.error('Error:', error);
@@ -682,8 +724,13 @@
       
       let html = '';
       selectedWaypoints.forEach((wp, index) => {
+        const isActive = gpsActive && index === currentStopIndex;
+        const isCompleted = gpsActive && index < currentStopIndex;
+        const activeClass = isActive ? 'waypoint-active' : '';
+        const completedClass = isCompleted ? 'waypoint-completed' : '';
+        
         html += `
-          <div class="waypoint-item flex items-center justify-between p-2 rounded mb-1 bg-gray-50">
+          <div class="waypoint-item flex items-center justify-between p-2 rounded mb-1 bg-gray-50 ${activeClass} ${completedClass}">
             <div class="flex items-center space-x-2 flex-1">
               <span class="bg-purple-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">${index + 1}</span>
               <div class="flex-1 min-w-0">
@@ -691,9 +738,7 @@
                 <div class="text-xs text-gray-500">${wp.servicio}</div>
               </div>
             </div>
-            <button onclick="removeWaypoint(${wp.nro})" class="ml-2 text-red-500 hover:text-red-700">
-              <i class="fas fa-times"></i>
-            </button>
+            ${!gpsActive ? `<button onclick="removeWaypoint(${wp.nro})" class="ml-2 text-red-500 hover:text-red-700"><i class="fas fa-times"></i></button>` : ''}
           </div>
         `;
       });
@@ -721,6 +766,7 @@
       const btnClear = document.getElementById('btn-clear');
       const btnExportTxt = document.getElementById('btn-export-txt');
       const btnExportGmaps = document.getElementById('btn-export-gmaps');
+      const btnStartGps = document.getElementById('btn-start-gps');
       
       if (selectedWaypoints.length >= 2) {
         btnCalculate.disabled = false;
@@ -730,13 +776,14 @@
         btnClear.disabled = true;
       }
       
-      // Habilitar exportación si hay ruta calculada
       if (optimizedRouteOrder.length > 0) {
         btnExportTxt.disabled = false;
         btnExportGmaps.disabled = false;
+        btnStartGps.disabled = false;
       } else {
         btnExportTxt.disabled = true;
         btnExportGmaps.disabled = true;
+        btnStartGps.disabled = true;
       }
     }
 
@@ -753,7 +800,6 @@
       btn.disabled = true;
       
       try {
-        // Obtener punto de inicio
         let startPoint;
         
         if (customStartPoint) {
@@ -768,7 +814,6 @@
           }
         }
         
-        // Optimizar orden de visita
         optimizedRouteOrder = optimizeRoute(startPoint, selectedWaypoints);
         
         const waypoints = [
@@ -884,6 +929,188 @@
       document.getElementById('clients-count').textContent = selectedWaypoints.length;
     }
 
+    // ==================== FUNCIONES DE NAVEGACIÓN GPS ====================
+
+    // Iniciar navegación GPS
+    function startGPSNavigation() {
+      if (optimizedRouteOrder.length === 0) {
+        alert('Primero calcula una ruta óptima');
+        return;
+      }
+      
+      if (!navigator.geolocation) {
+        alert('Tu navegador no soporta geolocalización');
+        return;
+      }
+      
+      gpsActive = true;
+      currentStopIndex = 0;
+      
+      // Mostrar panel de navegación
+      document.getElementById('gps-navigation-panel').classList.remove('hidden');
+      
+      // Solicitar permiso de geolocalización
+      navigator.geolocation.getCurrentPosition(
+        function(position) {
+          currentLocation = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+          
+          // Agregar marcador de ubicación actual
+          updateUserMarker(currentLocation.lat, currentLocation.lng);
+          
+          // Iniciar seguimiento continuo
+          locationWatcher = navigator.geolocation.watchPosition(
+            function(pos) {
+              currentLocation = {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude
+              };
+              updateUserMarker(currentLocation.lat, currentLocation.lng);
+              updateGPSNavigation();
+            },
+            function(error) {
+              console.error('Error de geolocalización:', error);
+            },
+            {
+              enableHighAccuracy: true,
+              maximumAge: 10000,
+              timeout: 5000
+            }
+          );
+          
+          // Actualizar navegación
+          updateGPSNavigation();
+          
+          alert('✅ Navegación GPS iniciada!\n\nPermite el acceso a tu ubicación para comenzar.');
+        },
+        function(error) {
+          console.error('Error al obtener ubicación:', error);
+          alert('❌ No se pudo obtener tu ubicación. Verifica los permisos de geolocalización.');
+          gpsActive = false;
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+      
+      updateWaypointsList();
+    }
+
+    // Actualizar marcador de ubicación del usuario
+    function updateUserMarker(lat, lng) {
+      if (userMarker) {
+        userMarker.setLatLng([lat, lng]);
+      } else {
+        const userIcon = L.divIcon({
+          className: 'marker-icon marker-current',
+          html: '<i class="fas fa-car"></i>',
+          iconSize: [40, 40],
+          iconAnchor: [20, 20]
+        });
+        
+        userMarker = L.marker([lat, lng], { icon: userIcon })
+          .addTo(map)
+          .bindPopup('<div class="custom-popup"><div class="popup-title">📍 Tu Ubicación</div></div>');
+      }
+      
+      map.setView([lat, lng], 16);
+    }
+
+    // Actualizar información de navegación GPS
+    function updateGPSNavigation() {
+      if (!gpsActive || !currentLocation || currentStopIndex >= optimizedRouteOrder.length) {
+        return;
+      }
+      
+      const nextStop = optimizedRouteOrder[currentStopIndex];
+      const distance = calculateDistance(
+        currentLocation.lat, currentLocation.lng,
+        nextStop.lat, nextStop.lng
+      );
+      
+      // Estimación de tiempo (asumiendo 30 km/h promedio en ciudad)
+      const timeMinutes = Math.round((distance / 30) * 60);
+      
+      // Actualizar panel de navegación
+      document.getElementById('gps-next-stop').textContent = currentStopIndex + 1;
+      document.getElementById('gps-distance').textContent = distance.toFixed(1);
+      document.getElementById('gps-time').textContent = timeMinutes;
+      document.getElementById('gps-progress').textContent = `${currentStopIndex + 1}/${optimizedRouteOrder.length}`;
+      document.getElementById('gps-current-client').textContent = nextStop.cliente;
+      document.getElementById('gps-current-address').textContent = nextStop.direccion;
+      
+      // Verificar si llegó cerca de la parada (menos de 100 metros)
+      if (distance < 0.1) {
+        if (confirm(`✅ ¡Has llegado a ${nextStop.cliente}!\n\n¿Marcar como visitada y continuar a la siguiente parada?`)) {
+          completeCurrentStop();
+        }
+      }
+      
+      updateWaypointsList();
+    }
+
+    // Completar parada actual y avanzar a la siguiente
+    function completeCurrentStop() {
+      currentStopIndex++;
+      
+      if (currentStopIndex >= optimizedRouteOrder.length) {
+        alert('🎉 ¡Felicidades! Has completado todas las paradas de la ruta.');
+        stopNavigation();
+        return;
+      }
+      
+      updateGPSNavigation();
+      updateWaypointsList();
+    }
+
+    // Navegar a la siguiente parada (abre Google Maps)
+    function navigateToNextStop() {
+      if (!gpsActive || currentStopIndex >= optimizedRouteOrder.length) {
+        return;
+      }
+      
+      const nextStop = optimizedRouteOrder[currentStopIndex];
+      
+      let origin;
+      if (currentLocation) {
+        origin = `${currentLocation.lat},${currentLocation.lng}`;
+      } else {
+        alert('Esperando ubicación actual...');
+        return;
+      }
+      
+      const destination = `${nextStop.lat},${nextStop.lng}`;
+      const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
+      
+      window.open(url, '_blank');
+    }
+
+    // Detener navegación GPS
+    function stopNavigation() {
+      gpsActive = false;
+      currentStopIndex = 0;
+      
+      if (locationWatcher) {
+        navigator.geolocation.clearWatch(locationWatcher);
+        locationWatcher = null;
+      }
+      
+      if (userMarker) {
+        map.removeLayer(userMarker);
+        userMarker = null;
+      }
+      
+      document.getElementById('gps-navigation-panel').classList.add('hidden');
+      
+      updateWaypointsList();
+      
+      alert('Navegación GPS detenida');
+    }
+
     // Exportar ruta como archivo de texto
     function exportRouteText() {
       if (optimizedRouteOrder.length === 0) {
@@ -978,15 +1205,10 @@
         return;
       }
       
-      // Preparar coordenadas
-      updateCoordinatesText();
-      
-      // Mostrar/ocultar opciones según cantidad de paradas
       const totalStops = optimizedRouteOrder.length;
       document.getElementById('option-direct').style.display = totalStops <= 10 ? 'block' : 'none';
       document.getElementById('option-segments').style.display = totalStops > 10 ? 'block' : 'none';
       
-      // Generar segmentos si es necesario
       if (totalStops > 10) {
         generateSegmentsList();
       }
@@ -998,41 +1220,7 @@
       document.getElementById('export-modal').classList.remove('active');
     }
 
-    // Actualizar texto de coordenadas
-    function updateCoordinatesText() {
-      let startPoint;
-      
-      if (customStartPoint) {
-        startPoint = customStartPoint;
-      } else {
-        const startPointStr = document.getElementById('start-point-select').value;
-        if (startPointStr) {
-          const [lat, lng] = startPointStr.split(',').map(Number);
-          startPoint = { lat, lng };
-        } else {
-          startPoint = { lat: rosarioCenter[0], lng: rosarioCenter[1] };
-        }
-      }
-      
-      let coords = `${startPoint.lat.toFixed(6)},${startPoint.lng.toFixed(6)}\n`;
-      optimizedRouteOrder.forEach(client => {
-        coords += `${client.lat.toFixed(6)},${client.lng.toFixed(6)}\n`;
-      });
-      
-      document.getElementById('coordinates-text').value = coords;
-    }
-
-    // Copiar coordenadas
-    function copyCoordinates() {
-      const text = document.getElementById('coordinates-text').value;
-      navigator.clipboard.writeText(text).then(() => {
-        alert('✅ Coordenadas copiadas al portapapeles!');
-      }).catch(() => {
-        prompt('Copia manualmente:', text);
-      });
-    }
-
-    // Exportar URL directa de Google Maps (hasta 10 paradas)
+    // Exportar URL directa de Google Maps
     function exportGoogleMapsDirect() {
       const url = generateGoogleMapsURL(optimizedRouteOrder);
       window.open(url, '_blank');
@@ -1066,7 +1254,7 @@
     // Crear segmentos de ruta
     function createRouteSegments() {
       const segments = [];
-      const chunkSize = 9; // 9 paradas + origen = 10 total
+      const chunkSize = 9;
       
       for (let i = 0; i < optimizedRouteOrder.length; i += chunkSize) {
         const chunk = optimizedRouteOrder.slice(i, i + chunkSize);
@@ -1088,7 +1276,6 @@
       let startPoint;
       
       if (segmentIndex === 0) {
-        // Primer segmento usa el punto de inicio original
         if (customStartPoint) {
           startPoint = customStartPoint;
         } else {
@@ -1101,7 +1288,6 @@
           }
         }
       } else {
-        // Segmentos posteriores usan la última parada del segmento anterior
         const prevSegment = segments[segmentIndex - 1];
         startPoint = prevSegment.stops[prevSegment.stops.length - 1];
       }
@@ -1117,10 +1303,10 @@
       segments.forEach((segment, index) => {
         setTimeout(() => {
           openSegmentInMaps(index);
-        }, index * 1000); // Abrir con 1 segundo de diferencia
+        }, index * 1000);
       });
       
-      alert(`✅ Se abrirán ${segments.length} segmentos de Google Maps en pestañas separadas`);
+      alert(`✅ Se abrirán ${segments.length} segmentos de Google Maps`);
     }
 
     // Generar URL de Google Maps
@@ -1142,16 +1328,12 @@
       }
       
       let waypoints = [];
-      
-      // Agregar punto de inicio
       waypoints.push(`${startPoint.lat}%2C${startPoint.lng}`);
       
-      // Agregar waypoints
       stops.forEach(client => {
         waypoints.push(`${client.lat}%2C${client.lng}`);
       });
       
-      // Construir URL de Google Maps
       const origin = waypoints[0];
       const destination = waypoints[waypoints.length - 1];
       const waypointsParam = waypoints.slice(1, -1).join('|');
@@ -1183,14 +1365,12 @@
         }
       }
       
-      // Generar contenido KML
       let kml = '<?xml version="1.0" encoding="UTF-8"?>\n';
       kml += '<kml xmlns="http://www.opengis.net/kml/2.2">\n';
       kml += '<Document>\n';
       kml += `  <name>Ruta Optimizada - ${new Date().toLocaleDateString('es-AR')}</name>\n`;
-      kml += '  <description>Ruta optimizada generada por Optimizador de Rutas - Clientes Rosario</description>\n\n';
+      kml += '  <description>Ruta optimizada generada por Optimizador de Rutas</description>\n\n';
       
-      // Estilo para la línea
       kml += '  <Style id="routeStyle">\n';
       kml += '    <LineStyle>\n';
       kml += '      <color>ff8b5cf6</color>\n';
@@ -1198,27 +1378,23 @@
       kml += '    </LineStyle>\n';
       kml += '  </Style>\n\n';
       
-      // Placemark para el punto de inicio
       kml += '  <Placemark>\n';
       kml += '    <name>🚩 Punto de Inicio</name>\n';
-      kml += '    <description>Inicio de la ruta</description>\n';
       kml += '    <Point>\n';
       kml += `      <coordinates>${startPoint.lng},${startPoint.lat}</coordinates>\n`;
       kml += '    </Point>\n';
       kml += '  </Placemark>\n\n';
       
-      // Placemarks para cada parada
       optimizedRouteOrder.forEach((client, index) => {
         kml += '  <Placemark>\n';
         kml += `    <name>${index + 1}. ${client.cliente}</name>\n`;
-        kml += `    <description>${client.direccion}\\nTel: ${client.tel1}\\nServicio: ${client.servicio}</description>\n`;
+        kml += `    <description>${client.direccion}\\nTel: ${client.tel1}</description>\n`;
         kml += '    <Point>\n';
         kml += `      <coordinates>${client.lng},${client.lat}</coordinates>\n`;
         kml += '    </Point>\n';
         kml += '  </Placemark>\n\n';
       });
       
-      // LineString para la ruta completa
       kml += '  <Placemark>\n';
       kml += '    <name>Ruta Completa</name>\n';
       kml += '    <styleUrl>#routeStyle</styleUrl>\n';
@@ -1236,7 +1412,6 @@
       kml += '</Document>\n';
       kml += '</kml>';
       
-      // Descargar archivo
       const blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' });
       const link = document.createElement('a');
       const timestamp = new Date().toISOString().slice(0,10);
@@ -1244,7 +1419,7 @@
       link.download = `ruta_optimizada_${timestamp}.kml`;
       link.click();
       
-      alert('✅ Archivo KML descargado!\n\nPara usarlo:\n1. Ve a Google Maps\n2. Menú → Tus lugares → Mapas → Crear mapa\n3. Importar → Selecciona el archivo KML');
+      alert('✅ Archivo KML descargado!');
     }
 
     // Modal de importación
@@ -1256,33 +1431,12 @@
       document.getElementById('import-modal').classList.remove('active');
     }
 
-    // Manejar importación de archivo
-    function handleFileImport(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      
-      const reader = new FileReader();
-      const fileName = file.name.toLowerCase();
-      
-      reader.onload = function(e) {
-        const content = e.target.result;
-        document.getElementById('import-text').value = content;
-      };
-      
-      if (fileName.endsWith('.csv') || fileName.endsWith('.txt')) {
-        reader.readAsText(file);
-      } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
-        alert('Para archivos Excel, por favor conviértelos primero a CSV o copia y pega los datos en el área de texto.');
-        event.target.value = '';
-      }
-    }
-
     // Importar direcciones
     async function importAddresses() {
       const text = document.getElementById('import-text').value.trim();
       
       if (!text) {
-        alert('Por favor, ingresa direcciones o sube un archivo');
+        alert('Por favor, ingresa direcciones');
         return;
       }
       
@@ -1313,7 +1467,6 @@
           const servicio = parts[2] || 'Sin especificar';
           const telefono = parts[3] || '';
           
-          // Geocodificar dirección usando Nominatim (OpenStreetMap)
           try {
             const coords = await geocodeAddress(direccion + ', Rosario, Santa Fe, Argentina');
             
@@ -1337,12 +1490,10 @@
             console.error('Error geocodificando:', error);
           }
           
-          // Pequeña pausa para no sobrecargar la API
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
       
-      // Agregar nuevos clientes
       if (newClients.length > 0) {
         clientsData = [...clientsData, ...newClients];
         filteredData = [...clientsData];
@@ -1353,20 +1504,20 @@
         document.getElementById('import-count').textContent = importedCount;
         document.getElementById('import-results').classList.remove('hidden');
         
-        alert(`✅ ${importedCount} direcciones importadas y geolocalizadas exitosamente!`);
+        alert(`✅ ${importedCount} direcciones importadas!`);
         
         setTimeout(() => {
           closeImportModal();
         }, 2000);
       } else {
-        alert('❌ No se pudieron geolocalizar las direcciones. Verifica el formato.');
+        alert('❌ No se pudieron geolocalizar las direcciones.');
       }
       
       btn.innerHTML = originalText;
       btn.disabled = false;
     }
 
-    // Geocodificar dirección usando Nominatim
+    // Geocodificar dirección
     async function geocodeAddress(address) {
       try {
         const encodedAddress = encodeURIComponent(address);
@@ -1393,6 +1544,8 @@
         map.removeControl(routingControl);
         routingControl = null;
       }
+      
+      stopNavigation();
       
       selectedWaypoints = [];
       optimizedRouteOrder = [];
