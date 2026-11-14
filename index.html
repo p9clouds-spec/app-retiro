@@ -314,7 +314,7 @@
         <!-- ACCIONES FINALES -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
            <button onclick="openExportModal()" id="btn-export-gmaps" class="bg-red-500 hover:bg-red-600 text-white py-4 rounded-xl font-bold shadow-md transition-colors flex items-center justify-center disabled:opacity-50" disabled>
-             <i class="fas fa-map-marked-alt mr-2"></i> Exportar Google Maps
+             <i class="fas fa-map-marked-alt mr-2"></i> Exportar a Google Maps
            </button>
            <button onclick="startWazeMode()" id="btn-start-waze" class="bg-green-600 hover:bg-green-700 text-white py-4 rounded-xl font-bold shadow-lg transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center" disabled>
              <i class="fas fa-location-arrow mr-2"></i> INICIAR GPS PRO
@@ -399,23 +399,26 @@
   <div id="export-modal" class="modal-overlay">
     <div class="modal-content">
       <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-bold text-gray-800"><i class="fas fa-map-marked-alt mr-2 text-red-600"></i>Exportar a Google Maps</h2>
+        <h2 class="text-xl font-bold text-gray-800"><i class="fas fa-map-marked-alt mr-2 text-red-600"></i>Exportar Ruta</h2>
         <button onclick="closeExportModal()" class="text-gray-500 hover:text-gray-700"><i class="fas fa-times text-2xl"></i></button>
       </div>
       <div class="space-y-4">
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800"><i class="fas fa-info-circle mr-2"></i>Google Maps permite hasta 10 paradas. Rutas largas se dividen.</div>
-        <div id="option-direct" class="bg-white border-2 border-gray-200 rounded-lg p-4">
-          <h3 class="font-bold text-gray-800 mb-2"><i class="fas fa-link mr-2 text-blue-600"></i>Opción 1: URL Directa</h3>
-          <button onclick="exportGoogleMapsDirect()" class="w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold">Abrir en Google Maps</button>
-        </div>
-        <div id="option-segments" class="bg-white border-2 border-gray-200 rounded-lg p-4">
-          <h3 class="font-bold text-gray-800 mb-2"><i class="fas fa-cut mr-2 text-green-600"></i>Opción 2: Por Segmentos</h3>
-          <div id="segments-list" class="space-y-2 mb-3"></div>
-          <button onclick="exportGoogleMapsSegments()" class="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold">Generar Segmentos</button>
-        </div>
+        <!-- Opción 1: Enlace Único Google Maps -->
         <div class="bg-white border-2 border-gray-200 rounded-lg p-4">
-          <h3 class="font-bold text-gray-800 mb-2"><i class="fas fa-file-code mr-2 text-purple-600"></i>Opción 3: Archivo KML</h3>
-          <button onclick="exportKML()" class="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold">Descargar KML</button>
+          <h3 class="font-bold text-gray-800 mb-2"><i class="fas fa-link mr-2 text-blue-600"></i>Opción 1: Enlace Único Google Maps</h3>
+          <p class="text-xs text-gray-500 mb-3">Genera un solo enlace con TODAS las paradas en orden optimizado.</p>
+          <button onclick="exportGoogleMapsSingleLink()" class="w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold">
+            <i class="fas fa-external-link-alt mr-2"></i>Abrir Enlace Completo
+          </button>
+        </div>
+
+        <!-- Opción 2: Archivo TXT -->
+        <div class="bg-white border-2 border-gray-200 rounded-lg p-4">
+          <h3 class="font-bold text-gray-800 mb-2"><i class="fas fa-file-alt mr-2 text-purple-600"></i>Opción 2: Exportar Lista TXT</h3>
+          <p class="text-xs text-gray-500 mb-3">Descarga un archivo de texto con nombres y direcciones.</p>
+          <button onclick="exportTextFile()" class="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold">
+            <i class="fas fa-download mr-2"></i>Descargar Lista TXT
+          </button>
         </div>
       </div>
     </div>
@@ -849,100 +852,115 @@
       return R * c;
     }
 
-    // ================= EXPORTAR =================
-    function exportCSV() {
-      let csv = "Nro,Nombre,Direccion,Servicio,Telefono,Estado,Asesor,Lat,Lng\n";
-      selectedWaypoints.forEach(w => {
-        csv += `${w.nro},"${w.cliente}","${w.direccion}",${w.servicio},${w.tel1},${w.estadoTipo},${w.asesor},${w.lat},${w.lng}\n`;
-      });
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'ruta_trackpro.csv'; a.click();
-    }
+    // ================= EXPORTAR A GOOGLE MAPS (FORMATO EXACTO SOLICITADO) =================
     
+    function getSelectedAddresses() {
+      // Construir array de objetos con dirección completa formateada para Google Maps
+      return selectedWaypoints.map(w => ({
+        address: `${w.direccion}, Rosario, Santa Fe, Argentina`,
+        client: w.cliente,
+        service: w.servicio,
+        tel1: w.tel1,
+        lat: w.lat,
+        lng: w.lng
+      }));
+    }
+
+    /**
+     * Genera URL en formato exacto solicitado:
+     * https://www.google.com/maps/dir/Direccion1/Direccion2/.../DireccionN
+     * SIN DIVIDIR EN SEGMENTOS, UN SOLO ENLACE CON TODAS LAS PARADAS
+     */
+    function generateGoogleMapsURL(addresses) {
+      if (!addresses || addresses.length === 0) return null;
+      
+      const encodedAddresses = addresses.map(addr => 
+        encodeURIComponent(addr.address)
+      );
+      
+      return `https://www.google.com/maps/dir/${encodedAddresses.join('/')}`;
+    }
+
+    /**
+     * Genera contenido TXT con nombres y direcciones
+     */
+    function generateTextContent(addresses) {
+      if (!addresses || addresses.length === 0) return '';
+      
+      let content = 'LISTA DE PARADAS OPTIMIZADAS\n';
+      content += '============================\n\n';
+      
+      addresses.forEach((addr, index) => {
+        content += `${index + 1}. ${addr.client}\n`;
+        content += `   Dirección: ${addr.address}\n`;
+        content += `   Servicio: ${addr.service}\n`;
+        content += `   Teléfono: ${addr.tel1 || 'N/A'}\n\n`;
+      });
+      
+      content += '============================\n';
+      content += `Total de paradas: ${addresses.length}\n`;
+      content += `Generado por TrackPro GPS Pro\n`;
+      content += `Fecha: ${new Date().toLocaleString('es-AR')}\n`;
+      
+      return content;
+    }
+
+    /**
+     * Descarga archivo TXT
+     */
+    function downloadTextFile(content, filename = 'lista_paradas.txt') {
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    /**
+     * Abre modal de exportación con opciones simplificadas
+     */
     function openExportModal() {
       if (optimizedRoute.length === 0) { alert('Primero calcula una ruta óptima'); return; }
-      const totalStops = optimizedRoute.length;
-      document.getElementById('option-direct').style.display = totalStops <= 10 ? 'block' : 'none';
-      document.getElementById('option-segments').style.display = totalStops > 10 ? 'block' : 'none';
-      if (totalStops > 10) generateSegmentsList();
       document.getElementById('export-modal').classList.add('active');
     }
 
-    function closeExportModal() { document.getElementById('export-modal').classList.remove('active'); }
-
-    function exportGoogleMapsDirect() {
-      window.open(generateGoogleMapsURL(optimizedRoute), '_blank');
+    function closeExportModal() { 
+      document.getElementById('export-modal').classList.remove('active'); 
     }
 
-    function generateSegmentsList() {
-      const segments = createRouteSegments();
-      const container = document.getElementById('segments-list');
-      let html = '';
-      segments.forEach((segment, index) => {
-        html += `<div class="bg-gray-50 border border-gray-200 rounded p-3"><div class="flex justify-between items-center"><div><span class="font-semibold text-sm">Segmento ${index + 1}:</span><span class="text-xs text-gray-600 ml-2">${segment.stops.length} paradas</span></div><button onclick="openSegmentInMaps(${index})" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs"><i class="fas fa-external-link-alt mr-1"></i>Abrir</button></div></div>`;
-      });
-      container.innerHTML = html;
-    }
-
-    function createRouteSegments() {
-      const segments = [], chunkSize = 9;
-      for (let i = 0; i < optimizedRoute.length; i += chunkSize) {
-        segments.push({ stops: optimizedRoute.slice(i, i + chunkSize), startIndex: i });
+    /**
+     * Exporta enlace único de Google Maps con TODAS las paradas
+     */
+    function exportGoogleMapsSingleLink() {
+      const addresses = getSelectedAddresses();
+      const url = generateGoogleMapsURL(addresses);
+      if (url) {
+        window.open(url, '_blank');
+        closeExportModal();
+      } else {
+        alert('❌ Error al generar el enlace');
       }
-      return segments;
     }
 
-    function openSegmentInMaps(segmentIndex) {
-      const segments = createRouteSegments();
-      let startPoint = segmentIndex === 0 ? (customStartPoint || { lat: -32.9520, lng: -60.6680 }) : segments[segmentIndex - 1].stops[segments[segmentIndex - 1].stops.length - 1];
-      window.open(generateGoogleMapsURL(segments[segmentIndex].stops, startPoint), '_blank');
+    /**
+     * Exporta archivo TXT con nombres y direcciones
+     */
+    function exportTextFile() {
+      const addresses = getSelectedAddresses();
+      const content = generateTextContent(addresses);
+      if (content) {
+        downloadTextFile(content);
+        closeExportModal();
+      } else {
+        alert('❌ Error al generar el archivo');
+      }
     }
 
-    function exportGoogleMapsSegments() {
-      const segments = createRouteSegments();
-      segments.forEach((_, index) => setTimeout(() => openSegmentInMaps(index), index * 1000));
-      alert(`✅ Se abrirán ${segments.length} segmentos de Google Maps`);
-    }
-
-    function generateGoogleMapsURL(stops, customStart = null) {
-      let startPoint = customStart || customStartPoint || { lat: -32.9520, lng: -60.6680 };
-      let waypoints = [`${startPoint.lat}%2C${startPoint.lng}`];
-      stops.forEach(c => waypoints.push(`${c.lat}%2C${c.lng}`));
-      
-      const origin = waypoints[0], destination = waypoints[waypoints.length - 1];
-      const waypointsParam = waypoints.slice(1, -1).join('|');
-      let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}`;
-      if (waypointsParam) url += `&waypoints=${waypointsParam}`;
-      return url + '&travelmode=driving';
-    }
-
-    function exportKML() {
-      let startPoint = customStartPoint || { lat: -32.9520, lng: -60.6680 };
-      let kml = '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n';
-      kml += `  <name>Ruta Optimizada - ${new Date().toLocaleDateString('es-AR')}</name>\n`;
-      kml += '  <Style id="routeStyle"><LineStyle><color>ff8b5cf6</color><width>4</width></LineStyle></Style>\n\n';
-      kml += `  <Placemark><name>🚩 Inicio</name><Point><coordinates>${startPoint.lng},${startPoint.lat}</coordinates></Point></Placemark>\n\n`;
-      
-      optimizedRoute.forEach((c, i) => {
-        kml += `  <Placemark><name>${i+1}. ${c.cliente}</name><description>${c.direccion}\\nTel: ${c.tel1}</description><Point><coordinates>${c.lng},${c.lat}</coordinates></Point></Placemark>\n\n`;
-      });
-      
-      kml += '  <Placemark><name>Ruta Completa</name><styleUrl>#routeStyle</styleUrl><LineString><tessellate>1</tessellate><coordinates>\n';
-      kml += `        ${startPoint.lng},${startPoint.lat},0\n`;
-      optimizedRoute.forEach(c => kml += `        ${c.lng},${c.lat},0\n`);
-      kml += '      </coordinates></LineString></Placemark>\n\n</Document></kml>';
-      
-      const blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `ruta_optimizada_${new Date().toISOString().slice(0,10)}.kml`;
-      link.click();
-      alert('✅ Archivo KML descargado!');
-    }
-
-    // Modal de importación
+    // ================= IMPORTAR DIRECCIONES =================
     function openImportModal() { document.getElementById('import-modal').classList.add('active'); }
     function closeImportModal() { document.getElementById('import-modal').classList.remove('active'); }
 
